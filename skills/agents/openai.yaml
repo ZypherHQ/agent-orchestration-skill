@@ -1,0 +1,5 @@
+interface:
+  display_name: "Agentic Orchestration Control v3"
+  short_description: "Root-only token-aware Codex orchestration with state ledger, DAG planning, plan gate, and leaf-worker guards."
+policy:
+  allow_implicit_invocation: false
