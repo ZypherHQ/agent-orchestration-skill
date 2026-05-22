@@ -64,7 +64,7 @@ def main() -> None:
         if target:
             groups[target].extend(groups.pop("tests", []))
 
-    batches = [{"batch": name, "items": vals, "recommended_agent": "batch_implementer_medium" if name not in {"docs"} else "docs_researcher_medium"} for name, vals in groups.items()]
+    batches = [{"batch": name, "items": vals, "recommended_agent": "batch_implementer_medium" if name not in {"docs"} else "docs_researcher_low"} for name, vals in groups.items()]
     if len(batches) > args.max_batches:
         # Keep largest batches separate, merge the rest into general.
         batches.sort(key=lambda b: len(b["items"]), reverse=True)

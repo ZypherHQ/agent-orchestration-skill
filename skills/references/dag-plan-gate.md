@@ -23,6 +23,6 @@ A plan is executable when:
 Use:
 
 ```bash
-python .agents/skills/agentic-orchestration-control/scripts/dag_planner.py --task "..." --size M --surfaces frontend,backend > .orchestration/plan.json
-python .agents/skills/agentic-orchestration-control/scripts/plan_gate.py .orchestration/plan.json
+python .agents/skills/agent-orchestration-skill/scripts/dag_planner.py --task "..." --size M --surfaces frontend,backend > .orchestration/plan.json
+python .agents/skills/agent-orchestration-skill/scripts/plan_gate.py .orchestration/plan.json
 ```

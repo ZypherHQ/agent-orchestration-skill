@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-REQUIRED = {"id", "agent", "objective", "depends_on", "acceptance", "validation"}
+REQUIRED = {"id", "agent", "objective", "depends_on", "acceptance", "validation", "context_policy"}
 
 
 def validate(plan: dict) -> list[str]:
@@ -53,6 +53,9 @@ def validate(plan: dict) -> list[str]:
     policy = str(plan.get("dispatch_policy", ""))
     if "must not invoke skills" not in policy.lower() or "must not" not in policy.lower():
         problems.append("Dispatch policy must explicitly prevent worker skill invocation/delegation")
+    context_policy = str(plan.get("context_policy", ""))
+    if "context capsule" not in context_policy.lower() or "context coverage" not in context_policy.lower():
+        problems.append("Plan must include Context Capsule and Context Coverage policy")
     return problems
 
 

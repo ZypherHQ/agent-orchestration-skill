@@ -4,7 +4,7 @@ Goal: spawned subagents are workers, not orchestrators. Only the root session ma
 
 ## Why this exists
 
-`agents.max_depth = 1` is useful in legacy multi-agent paths, but newer MultiAgentV2 behavior has changed over time. Therefore worker containment must be enforced at multiple layers:
+`agents.max_depth = 1` is useful as a fallback, but worker containment must be enforced at multiple layers:
 
 1. Root config keeps `[agents].max_depth = 1`.
 2. Every custom worker TOML sets `[features].multi_agent = false`.

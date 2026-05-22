@@ -48,7 +48,7 @@ def load_state(root: Path, run_id: str) -> dict[str, Any]:
 
 def save_state(root: Path, run_id: str, state: dict[str, Any]) -> None:
     d = run_dir(root, run_id)
-    for sub in ["dispatches", "handoffs", "evidence", "logs"]:
+    for sub in ["dispatches", "handoffs", "evidence", "logs", "context"]:
         (d / sub).mkdir(parents=True, exist_ok=True)
     state["updated_at"] = now()
     state_path(root, run_id).write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -62,6 +62,7 @@ def init(args: argparse.Namespace) -> None:
         "task": args.task,
         "mode": args.mode,
         "status": "initialized",
+        "context_capsule": args.context_capsule,
         "created_at": now(),
         "updated_at": now(),
         "classification": {},
@@ -129,6 +130,7 @@ def main() -> None:
     p.add_argument("--task", required=True)
     p.add_argument("--mode", default="root")
     p.add_argument("--run-id")
+    p.add_argument("--context-capsule", default="")
     p.set_defaults(func=init)
 
     p = sub.add_parser("update")

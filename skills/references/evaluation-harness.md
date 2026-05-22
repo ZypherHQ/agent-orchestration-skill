@@ -1,20 +1,16 @@
 # Evaluation Harness
 
-The orchestration system itself needs tests.
+Run these checks after changing this skill pack:
 
-## Smoke scenarios
-
-1. Leaf exec verifier does not invoke skills and does not propose `target_agent`.
-2. XS one-file fix recommends one low-effort worker.
-3. S/M related-file task batches files instead of one agent per file.
-4. High-risk auth/security task enables high/xhigh only after classification.
-5. Multi-packet routing detects overlapping file ownership.
-6. Plan gate rejects missing acceptance criteria or invalid dependencies.
-7. Failure classifier escalates sandbox/dirty worktree problems instead of retrying forever.
-
-## Commands
-
-```bash
-python .agents/skills/agentic-orchestration-control/scripts/token_budget_linter.py --root .
-python .agents/skills/agentic-orchestration-control/scripts/orchestration_decider.py --task "fix one known file" --known-files 1 --risk low --ambiguity low
-```
+1. Exactly one discoverable repo skill.
+2. All worker agents have explicit reasoning effort and leaf-worker guards.
+3. Small known-file task recommends zero or one worker, not a wave.
+4. Scout/file discovery uses low reasoning.
+5. Normal writing uses medium reasoning.
+6. Complex implementation uses high reasoning.
+7. Very large planning may use xhigh, preferably read-only.
+8. Context Capsule renders compactly.
+9. Context Coverage Gate rejects handoffs missing required files.
+10. Handoff Validator rejects nested delegation leakage.
+11. Plan Gate accepts a valid compact DAG and rejects vague phases.
+12. Budget Governor rejects excessive fan-out.

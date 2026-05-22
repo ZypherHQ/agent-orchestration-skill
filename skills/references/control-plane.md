@@ -28,7 +28,7 @@ Use a small persistent control plane for non-trivial runs. The goal is not to cr
 ## Useful commands
 
 ```bash
-python .agents/skills/agentic-orchestration-control/scripts/run_ledger.py init --task "..."
-python .agents/skills/agentic-orchestration-control/scripts/run_ledger.py update --run-id <id> --kind dispatch --agent batch_implementer_medium --summary "..."
-python .agents/skills/agentic-orchestration-control/scripts/run_ledger.py show --run-id <id>
+python .agents/skills/agent-orchestration-skill/scripts/run_ledger.py init --task "..."
+python .agents/skills/agent-orchestration-skill/scripts/run_ledger.py update --run-id <id> --kind dispatch --agent batch_implementer_medium --summary "..."
+python .agents/skills/agent-orchestration-skill/scripts/run_ledger.py show --run-id <id>
 ```

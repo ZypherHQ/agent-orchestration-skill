@@ -22,7 +22,7 @@ def git_root(path: Path) -> Path | None:
 
 
 def status(root: Path) -> dict:
-    p = run(["git", "status", "--porcelain=v1"], root)
+    p = run(["git", "status", "--short"], root)
     return {"returncode": p.returncode, "dirty": bool(p.stdout.strip()), "porcelain": p.stdout.strip().splitlines(), "stderr": p.stderr.strip()}
 
 

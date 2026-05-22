@@ -1,15 +1,15 @@
 ---
-name: agentic-orchestration-control
-description: ROOT ORCHESTRATOR ONLY. Explicit-use token-aware Codex workflow with leaf workers, DAG gating, state ledger, retry policy, and no nested delegation.
+name: agent-orchestration-skill
+description: EXPLICIT ONLY. Use only when prompt contains `$agent-orchestration-skill`; never activate implicitly, inside subagents, or for no nested delegation.
 ---
 
-# Agentic Orchestration Control v3.0 — Control Plane + Token Efficiency
+# Agent Orchestration Skill
 
-Use this skill only in the root Codex session. Never instruct spawned subagents to invoke this or any other repo skill, and never instruct a spawned subagent to spawn more agents.
+Use this skill only when the user prompt contains the exact literal `$agent-orchestration-skill`. Do not use this skill for ordinary coding, testing, audit, debugging, or subagent tasks when that literal invocation is absent. Use it only in the root Codex session. Never instruct spawned subagents to invoke this or any other repo skill, and never instruct spawned subagents to spawn more agents.
 
 ## Step 0 — Runtime mode guard
 
-This skill is root-only. Before using it, confirm the current session is not a leaf `codex exec` verification job. If the prompt says `You are a subagent`, `verification subagent`, `Run exactly these commands`, `Do not edit files`, or `Return only a YAML Handoff Packet`, do **not** use this skill, do **not** spawn agents, and perform only the bounded leaf task.
+This skill is explicit-only and root-only. If the current user prompt does not contain `$agent-orchestration-skill`, stop using this skill and continue in normal mode. If the prompt says `You are a subagent`, `verification subagent`, `Run exactly these commands`, `Do not edit files`, `LEAF_EXEC_MODE`, or `Return only a YAML Handoff Packet`, do **not** use this skill, do **not** spawn agents, and perform only the bounded leaf task.
 
 For leaf `codex exec` jobs, prefer CLI hard overrides:
 
@@ -24,28 +24,28 @@ codex exec --cd /path/to/repo --sandbox workspace-write \
   'LEAF_EXEC_MODE. You are a verification leaf worker. Do not spawn agents. Run exactly the requested commands and return only the requested packet.'
 ```
 
-Read `references/exec-leaf-mode.md` when diagnosing subagents that try to spawn other agents.
-
 ## Prime directive
 
-Act as a **task compiler and control-plane operator**, not a prompt broadcaster. Classify the work, choose the cheapest adequate reasoning tier, batch related actions, compile minimal Dispatch Packets, track state, and collect concise Handoff Packets.
+Act as a **task compiler and context-preserving control-plane operator**, not a prompt broadcaster. Classify the work, preserve the essential context, choose the cheapest adequate reasoning tier, batch related actions, compile minimal Dispatch Packets, track state, and collect concise Handoff Packets. The Context Capsule is persistent storage; a Dispatch Packet is only a small scoped slice for one worker. The capsule stays on disk; workers receive only the narrow slice they need.
 
 ## Hard constraints
 
-1. **Root-only skill:** this skill is for the parent orchestrator. Subagents receive plain dispatch text, not skill names.
-2. **No one-agent-per-file fan-out:** batch related files by user flow, module, package, or owner.
-3. **No xhigh by default:** xhigh is reserved for hard ambiguity/high risk, not routine patches.
-4. **No redundant waves:** if one worker can inspect, patch, and test a small change, use one worker.
-5. **No raw output broadcast:** route only facts, blockers, file ownership, commands run, failures, and next actions.
-6. **Write workers must complete a loop:** inspect → patch → targeted validation → Handoff Packet.
-7. **Read-heavy work can be parallel; write-heavy work should be serialized or batched carefully.**
-8. **Leaf-worker boundary:** only the root session may spawn agents. Spawned workers must not delegate; they return `ESCALATE_TO_PARENT` when they need another specialist.
-9. **State before spawn:** for M/L/XL, create a run ledger and check it before spawning or respawning.
-10. **Plan gate before broad work:** M/L/XL tasks need a dependency-aware plan and binary executable gate before implementation.
+1. **Root-only skill:** subagents receive plain dispatch text, not skill names.
+2. **Context never depends on memory alone:** store essential facts in a Context Capsule before multi-phase or multi-worker execution.
+3. **No worker edits without Context Coverage:** a worker must read required files/areas and report coverage before changing code.
+4. **No one-agent-per-file fan-out:** batch related files by user flow, module, package, or owner.
+5. **No redundant waves:** if one worker can inspect, patch, and test a small change, use one worker.
+6. **No raw output broadcast:** route only facts, blockers, file ownership, commands run, failures, and next actions.
+7. **No full capsule broadcast:** keep the Context Capsule on disk and pass only a scoped slice to each worker.
+8. **Dispatch budgets:** cap must-read files, facts, decisions, tests, and context text before spawning. If the packet is large, narrow the scope instead of spawning.
+9. **Write workers must complete a loop:** context coverage → inspect → patch → targeted validation → Handoff Packet.
+10. **Read-heavy work can be parallel; write-heavy work should be serialized or batched carefully.**
+11. **Leaf-worker boundary:** only the root session may spawn agents. Workers return `ESCALATE_TO_PARENT` when they need help.
+12. **Plan and budget gates before broad work:** medium/large tasks need a compact phase plan and budget check before implementation.
 
 ## Step 1 — Classify before spawning
 
-Classify the task using these dimensions:
+Classify the task using:
 
 - Known files: 0, 1, 2–3, 4–8, 9+
 - Surfaces: frontend, backend, database, infra, docs, tests, browser, security
@@ -59,107 +59,149 @@ Use `scripts/orchestration_decider.py` when useful.
 
 ## Step 2 — Pick the minimum viable orchestration mode
 
-| Mode | Criteria | Agents |
+| Mode | Criteria | Default behavior |
 |---|---|---|
-| XS | Known one-file or tiny low-risk fix | `micro_implementer_low` only |
-| S | 1–3 related files, low/medium ambiguity | `micro_implementer_low` or `batch_implementer_medium`; optional `test_runner_low` |
-| M | 3–8 files or unclear owner/root cause | short DAG; `code_mapper_medium` then `batch_implementer_medium`; verifier |
-| L | Multi-surface feature/fix, 8–20 files | DAG + state ledger + bounded mapper/research + 1–2 implementers + verification |
-| XL | Ambiguous high-risk auth/payment/security/data/concurrency/prod incident | DAG + plan gate + `deep_debugger_xhigh` or high reviewers, then scoped implementers |
+| XS | Known tiny task | Usually no subagent. If root edits are forbidden, exactly one `micro_implementer_medium` |
+| S | 1–3 related files | One bundled `micro_implementer_medium` or `batch_implementer_medium`; optional exact `test_runner_low` only when useful |
+| M | 3–8 files or unclear owner | Short DAG; `code_mapper_low` only if discovery is needed; one batched implementer; verifier |
+| L | Multi-surface feature/fix | Ledger + DAG + bounded scout/research + 1–2 implementers + verification |
+| XL | Very large or critical ambiguous work | Ledger + DAG + plan gate + optional `strategy_architect_xhigh`, then scoped high/medium workers |
 
-## Step 3 — Create control-plane state when needed
+Do not spawn agents just to satisfy a habit. Spawn only when the worker has a meaningful bundle of work or isolates noisy verification/browser output. A useful worker must perform at least two valuable actions, such as inspect + patch, patch + validate, browser reproduce + evidence, or mapping + ownership summary.
 
-For XS/S, do not create unnecessary artifacts unless useful. For M/L/XL, initialize a run ledger:
+## Step 3 — Preserve context before dispatch
 
-```bash
-python .agents/skills/agentic-orchestration-control/scripts/run_ledger.py init --task "<task>"
-```
-
-Use the ledger to record phases, dispatches, Handoff Packets, claimed files, evidence, failures, and final status. Before spawning any worker, check the ledger for duplicate active/completed work. Read `references/control-plane.md` and `references/session-lifecycle.md` when needed.
-
-## Step 4 — Build a DAG only when orchestration is justified
-
-Do not use a DAG for tiny tasks. For M/L/XL, create a compact dependency-aware DAG with at most 7 phases:
+For every task with more than one phase or worker, create/update a Context Capsule. It is the root-owned source of truth for facts that must not be lost when a new subagent context opens. It is **not** prompt payload and must not be pasted wholesale into every worker prompt.
 
 ```bash
-python .agents/skills/agentic-orchestration-control/scripts/dag_planner.py --task "<task>" --size M --surfaces frontend,backend > .orchestration/plan.json
-python .agents/skills/agentic-orchestration-control/scripts/plan_gate.py .orchestration/plan.json
+python .agents/skills/agent-orchestration-skill/scripts/context_capsule.py init \
+  --task "<task>" \
+  --goal "<goal>" \
+  --must-read path/to/file_a \
+  --must-read path/to/file_b \
+  --acceptance "<observable acceptance criterion>" \
+  --validation "<command or QA check>" \
+  --out .orchestration/context_capsule.json
 ```
 
-If the gate rejects the plan, fix the plan before spawning. The plan gate checks executability, dependencies, acceptance criteria, validation, and worker leaf policy. Read `references/dag-plan-gate.md` when needed.
+Keep the capsule compact. Store confirmed facts, rejected assumptions, decisions, ownership, required files/areas, forbidden files/areas, acceptance criteria, validation commands, blockers, and evidence references. Do not store raw logs, transcripts, broad summaries, or private reasoning.
 
-## Step 5 — Enforce leaf-worker spawning boundary
-
-Before every spawn, verify the selected custom agent has all three safeguards:
-
-```text
-[features].multi_agent = false
-[agents].max_depth = 0
-LEAF WORKER CONTRACT in developer_instructions
-```
-
-Do not rely on `agents.max_depth = 1` alone. If a worker returns `ESCALATE_TO_PARENT`, the root decides whether to spawn another agent, resume the same worker, or continue serially.
-
-## Step 6 — Thinking/reasoning router
-
-- `low`: known file, straightforward code edit, targeted test, mechanical fix.
-- `medium`: normal feature/fix, several related files, moderate debugging, browser QA.
-- `high`: complex logic, edge cases, security review, migrations, broad regression audit.
-- `xhigh`: only when root cause is unknown and risk is high/critical, or the task involves security/payment/auth/data/concurrency across multiple surfaces.
-
-Do not use xhigh for a single-file fix unless that single file is security/payment/auth/data/concurrency critical or lower-effort attempts failed with evidence.
-
-Use `scripts/budget_governor.py` to catch obvious over-orchestration before spawning:
+When dispatching a worker, use a narrow slice:
 
 ```bash
-python .agents/skills/agentic-orchestration-control/scripts/budget_governor.py --size M --agents code_mapper_medium,batch_implementer_medium,verification_engine_medium --reasoning medium
+python .agents/skills/agent-orchestration-skill/scripts/context_capsule.py slice \
+  --file .orchestration/context_capsule.json \
+  --focus "<worker objective/scope>" \
+  --max-items 4
 ```
 
-## Step 7 — Compile Dispatch Packets
+Use:
 
-Dispatch Packets must be short and targeted. Do not paste the whole plan. Include:
+```bash
+python .agents/skills/agent-orchestration-skill/scripts/context_capsule.py render --file .orchestration/context_capsule.json --focus "<worker objective/scope>" --max-chars 1200
+```
+
+Read `references/context-capsule.md` when needed.
+
+## Step 4 — Create control-plane state when needed
+
+For XS/S, avoid unnecessary artifacts unless useful. For medium/large tasks, initialize a run ledger:
+
+```bash
+python .agents/skills/agent-orchestration-skill/scripts/run_ledger.py init --task "<task>"
+```
+
+Use the ledger to record phases, dispatches, Handoff Packets, claimed files, evidence, failures, context capsule path, and final status. Before spawning any worker, check the ledger for duplicate active/completed work.
+
+## Step 5 — Build a DAG only when orchestration is justified
+
+Do not use a DAG for tiny tasks. For medium/large tasks, create a compact dependency-aware DAG with at most 7 phases:
+
+```bash
+python .agents/skills/agent-orchestration-skill/scripts/dag_planner.py --task "<task>" --size M --surfaces frontend,backend > .orchestration/plan.json
+python .agents/skills/agent-orchestration-skill/scripts/plan_gate.py .orchestration/plan.json
+```
+
+If the gate rejects the plan, fix the plan before spawning. The plan gate checks executability, dependencies, acceptance criteria, validation, context policy, and worker leaf policy.
+
+## Step 6 — Reasoning router
+
+Use the cheapest adequate reasoning tier:
+
+- `low`: scouts, file/symbol discovery, code-path mapping, docs contract checks, exact command execution, routing/finalization.
+- `medium`: normal code writing, small-to-medium implementation bundles, browser QA, meaningful test design, verification matrices.
+- `high`: complex implementation, non-trivial business logic, migrations, concurrency suspicion, security-sensitive review, hard regression audit.
+- `xhigh`: very large ambiguous planning, architecture/feature structuring, critical design tradeoffs, or repeated high-effort failure with evidence.
+
+Do not use `xhigh` for routine updates, isolated fixes, simple debugging, or single-file implementation. Prefer `strategy_architect_xhigh` as read-only planning; use `complex_implementer_high` for hard writes.
+
+Use `scripts/budget_governor.py` before spawning:
+
+```bash
+python .agents/skills/agent-orchestration-skill/scripts/budget_governor.py --size M --agents code_mapper_low,batch_implementer_medium --reasoning medium --dispatch-chars <largest_packet_chars>
+```
+
+## Step 7 — Compile Dispatch Packets with required context
+
+A Dispatch Packet must be short, targeted, and include only a scoped Context Capsule slice. Do not paste the whole plan, whole capsule, raw logs, or previous transcripts. Include:
 
 ```text
 ROLE:
 MODE / REASONING BUDGET:
 OBJECTIVE:
 SCOPE OWNERSHIP:
+MUST READ BEFORE EDITING:
 FILES / AREAS ALLOWED:
 FILES / AREAS FORBIDDEN:
-CONTEXT DIGEST:
+CONTEXT CAPSULE SLICE:
+CONFIRMED FACTS:
+REJECTED ASSUMPTIONS:
 TASK BUNDLE:
 ACCEPTANCE CRITERIA:
 VALIDATION REQUIRED:
+CONTEXT COVERAGE CHECK:
 STOP CONDITIONS:
-SKILL / DELEGATION POLICY: Do not invoke skills. Do not spawn, request, recommend, or plan child subagents. If more agents are needed, return ESCALATE_TO_PARENT to the root. Treat this packet as complete.
-OUTPUT: concise Handoff Packet only.
+SKILL / DELEGATION POLICY:
+OUTPUT:
 ```
 
-Use `scripts/dispatch_compiler.py` when useful.
+Use `scripts/dispatch_compiler.py` when useful. It caps the capsule slice by default: 8 must-read items, 6 forbidden items, 5 facts, 3 rejected assumptions, 3 decisions, 5 acceptance criteria, 4 validation checks, and about 900 context characters. Workers must treat the packet as complete. If a required file/area is unavailable, they must return `ESCALATE_TO_PARENT` instead of guessing.
+
+If the compiled packet is too large, do not spawn yet. Narrow the worker objective, reduce must-read files, or split by dependency phase. Never solve token pressure by broadcasting a larger packet.
 
 ## Step 8 — Batch tasks
 
 Before spawning implementers, group work by ownership:
 
+- Before any spawn, ask: can the root do this directly, or can the assigned worker do the full loop alone?
 - Same user flow → one worker.
 - Same package/module → one worker.
 - Frontend + small API touch for the same feature → one `batch_implementer_medium`, not two agents.
 - Independent read-only audits → parallel agents are okay.
 - Independent write-heavy modules → separate workers only if file ownership does not overlap.
+- Do not spawn a scout if the implementer must read the same files anyway; put those files in `MUST READ`.
 
 Use `scripts/batch_tasks.py` when useful.
 
-## Step 9 — Communication routing and handoff validation
+## Step 9 — Handoff validation and context coverage gate
 
-Use `communication_router_low` only from the root session, and only when there are multiple Handoff Packets, conflicting claims, overlapping files, or many test results. For a one-worker XS/S task, the root can consume the Handoff Packet directly.
+Use `communication_router_low` only from the root session, and only when there are multiple Handoff Packets, conflicts, overlapping files, or many test results.
 
-Validate leaf handoffs if they are suspicious, too long, or contain routing fields:
+Validate leaf handoffs:
 
 ```bash
-python .agents/skills/agentic-orchestration-control/scripts/handoff_validate.py <handoff-file>
+python .agents/skills/agent-orchestration-skill/scripts/handoff_validate.py <handoff-file>
 ```
 
-Workers must not return `next_handoff`, `target_agent`, or any child-agent plan unless explicitly requested by the user.
+For context-sensitive work, validate coverage against the worker Dispatch Packet. This avoids forcing one worker to cover the whole capsule:
+
+```bash
+python .agents/skills/agent-orchestration-skill/scripts/context_coverage_gate.py --dispatch <dispatch-file> --handoff <handoff-file>
+```
+
+Use `--capsule --full-capsule` only when a single worker was explicitly assigned every must-read item in the capsule.
+
+Workers must not return `next_handoff`, `target_agent`, or child-agent plans unless explicitly requested by the user.
 
 ## Step 10 — Failure recovery
 
@@ -174,38 +216,36 @@ Do not respond to failure by blindly spawning another agent.
 Use:
 
 ```bash
-python .agents/skills/agentic-orchestration-control/scripts/failure_classifier.py --file <failure-log>
+python .agents/skills/agent-orchestration-skill/scripts/failure_classifier.py --file <failure-log>
 ```
-
-Read `references/failure-recovery.md` when needed.
 
 ## Step 11 — Verification gate
 
 - XS/S: targeted tests or commands relevant to touched files.
-- M: targeted tests + lint/typecheck/build where relevant.
+- M: targeted tests + relevant lint/typecheck/build/integration gate.
 - L/XL: full matrix, browser QA if UI flow changed, security/regression review if high-risk.
 
 Use `scripts/test_matrix.py` and `scripts/quality_gate.py` for deterministic command discovery/execution.
 
 ## Step 12 — Worktree isolation when appropriate
 
-For L/XL, dirty checkouts, or high-risk multi-file edits, consider isolated worktree planning before implementation:
+For large tasks, dirty checkouts, or high-risk multi-file edits, consider isolated worktree planning before implementation:
 
 ```bash
-python .agents/skills/agentic-orchestration-control/scripts/worktree_guard.py --root . --run-id <run_id>
+python .agents/skills/agent-orchestration-skill/scripts/worktree_guard.py --root . --run-id <run_id>
 ```
 
-Only create a worktree when it is clearly useful and safe. Read `references/worktree-isolation.md` when needed.
+Only create a worktree when it is clearly useful and safe.
 
 ## Step 13 — Durable learning, not transcript bloat
 
 At the end of meaningful runs, write a tiny notepad entry only if the insight will help future work:
 
 ```bash
-python .agents/skills/agentic-orchestration-control/scripts/notepad.py --kind learnings --context "..." --insight "..." --impact "..."
+python .agents/skills/agent-orchestration-skill/scripts/notepad.py --kind learnings --context "..." --insight "..." --impact "..."
 ```
 
-Do not store raw logs, private reasoning, or generic summaries. Read `references/wisdom-notepads.md` when needed.
+Do not store raw logs, private reasoning, or generic summaries.
 
 ## Step 14 — Final output
 
@@ -213,6 +253,7 @@ Return a PR-ready summary:
 
 - Classification and why the chosen agent count/reasoning was sufficient.
 - Run ID if a ledger was created.
+- Context Capsule path if used.
 - Agents used and why.
 - Files changed.
 - Tests/commands/browser checks run and results.
@@ -226,6 +267,8 @@ Read these only when needed:
 
 - `references/spawn-economics.md`
 - `references/thinking-router.md`
+- `references/context-capsule.md`
+- `references/context-coverage-gate.md`
 - `references/dispatch-packet.md`
 - `references/worker-contract.md`
 - `references/test-gate.md`

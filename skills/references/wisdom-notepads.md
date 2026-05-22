@@ -23,5 +23,5 @@ Bad entries:
 Use:
 
 ```bash
-python .agents/skills/agentic-orchestration-control/scripts/notepad.py --kind learnings --context "..." --insight "..." --impact "..."
+python .agents/skills/agent-orchestration-skill/scripts/notepad.py --kind learnings --context "..." --insight "..." --impact "..."
 ```

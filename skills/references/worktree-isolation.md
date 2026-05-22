@@ -18,11 +18,11 @@ For L/XL or dirty-checkout work, prefer an isolated git worktree so implementati
 Use plan mode first:
 
 ```bash
-python .agents/skills/agentic-orchestration-control/scripts/worktree_guard.py --root . --run-id <id>
+python .agents/skills/agent-orchestration-skill/scripts/worktree_guard.py --root . --run-id <id>
 ```
 
 Creation is explicit:
 
 ```bash
-python .agents/skills/agentic-orchestration-control/scripts/worktree_guard.py --root . --run-id <id> --create
+python .agents/skills/agent-orchestration-skill/scripts/worktree_guard.py --root . --run-id <id> --create
 ```

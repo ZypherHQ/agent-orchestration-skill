@@ -19,5 +19,5 @@ Failures should trigger diagnosis, not immediate fan-out.
 Use:
 
 ```bash
-python .agents/skills/agentic-orchestration-control/scripts/failure_classifier.py --file .orchestration/runs/<id>/evidence/failure.log
+python .agents/skills/agent-orchestration-skill/scripts/failure_classifier.py --file .orchestration/runs/<id>/evidence/failure.log
 ```

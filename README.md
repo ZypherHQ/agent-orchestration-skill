@@ -1,7 +1,7 @@
-# Agentic Orchestration Control
+# Agent Orchestration Skill
 
 <p align="center">
-  <em>Root-only, token-aware Codex orchestration with leaf-worker guards, DAG planning, run ledger state, and deterministic verification utilities.</em>
+  <em>Token-efficient subagent orchestration for coding agents: preserve context, avoid nested spawn, route reasoning deliberately, and verify every meaningful change.</em>
 </p>
 
 <p align="center">
@@ -11,94 +11,224 @@
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge&labelColor=0f172a" alt="MIT License" />
   </a>
-  <img src="https://img.shields.io/badge/Skill-1-2563eb?style=for-the-badge&labelColor=0f172a" alt="One installable skill" />
-  <img src="https://img.shields.io/badge/Utilities-16-f59e0b?style=for-the-badge&labelColor=0f172a" alt="Sixteen utility scripts" />
+  <img src="https://img.shields.io/badge/Skill-Explicit%20Only-2563eb?style=for-the-badge&labelColor=0f172a" alt="Explicit only skill" />
+  <img src="https://img.shields.io/badge/Subagents-Leaf%20Workers-f59e0b?style=for-the-badge&labelColor=0f172a" alt="Leaf worker subagents" />
 </p>
 
-Portable **Agent Skill** for Codex root sessions that need disciplined orchestration instead of prompt fan-out. This repo packages a single root-only skill, reference policies, an OpenAI agent manifest, and deterministic helper scripts for classification, batching, planning, budget checks, dispatch compilation, handoff validation, verification, failure recovery, and worktree safety.
+<p align="center">
+  <img src="./workflow-diagram.png" alt="Agent Orchestration Skill workflow diagram" width="100%" />
+</p>
 
-The design goal is simple: keep the parent session in control, keep leaf workers bounded, and keep token usage proportional to task size.
+<p align="center">
+  <sub>
+    <a href="#why-this-exists">Why</a> ·
+    <a href="#what-it-does">Features</a> ·
+    <a href="#how-it-works">Workflow</a> ·
+    <a href="#install">Install</a> ·
+    <a href="#usage">Usage</a> ·
+    <a href="#repo-layout">Repo Layout</a> ·
+    <a href="#utilities">Utilities</a> ·
+    <a href="#faq">FAQ</a>
+  </sub>
+</p>
 
-<p align="center"><sub><a href="#installing">Install</a> · <a href="#skill">Skill</a> · <a href="#what-it-enforces">Guardrails</a> · <a href="#workflow">Workflow</a> · <a href="#repo-layout">Repo Layout</a> · <a href="#scripts">Scripts</a> · <a href="#references">References</a> · <a href="#common-questions">FAQ</a> · <a href="#license">License</a></sub></p>
+## Why this exists
 
-## Installing
+Multi-agent coding can be powerful, but it often fails in predictable ways:
 
-The [`npx skills add`](https://github.com/vercel-labs/agent-skills) CLI scans the `skills/` directory in this repo.
+- too many subagents are spawned for work that only needs one focused pass;
+- each subagent starts with a fresh context and misses important facts;
+- workers try to delegate to other workers, causing nested spawn and token waste;
+- large transcripts are copied into every agent instead of sending scoped context;
+- reasoning effort is overused, especially for simple file discovery or small fixes;
+- verification is weak, duplicated, or disconnected from the actual change.
+
+**Agent Orchestration Skill** is a root-only control layer for coding agents. It helps the parent session decide whether orchestration is needed, which workers are useful, what context they receive, how much reasoning they should use, and how their output is validated.
+
+It is **Codex-first**, but the operating model can be adapted to Claude Code, OpenCode, Cursor, and other agentic coding environments.
+
+## What it does
+
+- **Explicit-only activation** — the skill should run only when you invoke `$agent-orchestration-skill`.
+- **Root-only orchestration** — the parent session coordinates; spawned workers execute bounded tasks.
+- **Leaf-worker boundaries** — workers must not invoke skills, spawn child agents, or route tasks to other workers.
+- **Context Capsule** — preserves task-critical context without turning the prompt into a transcript dump.
+- **Scoped Dispatch Packets** — each worker receives only the relevant context slice for its assignment.
+- **Context Coverage Gate** — workers must confirm required files/context before editing.
+- **Token-aware spawning** — avoids one-agent-per-file fan-out and blocks unnecessary waves.
+- **Reasoning router** — uses low, medium, high, or xhigh reasoning only where it makes sense.
+- **Batched execution** — groups related work by surface, ownership, module, or user flow.
+- **Run Ledger** — records phases, dispatches, handoffs, evidence, failures, and recovery decisions.
+- **Dependency-aware planning** — builds compact DAG plans for larger tasks.
+- **Plan Gate** — rejects vague, circular, or unverifiable execution plans.
+- **Budget Governor** — checks orchestration cost before spawning workers.
+- **Handoff Validator** — rejects noisy handoffs, nested delegation leakage, and missing evidence.
+- **Failure Recovery** — classifies failures before retrying, replanning, or escalating.
+- **Aggressive verification** — lint, typecheck, unit tests, integration tests, build checks, browser QA, and re-audit where relevant.
+- **Durable Notepads** — stores useful learnings and decisions without saving noisy transcripts.
+- **PR-ready reporting** — summarizes files changed, agents used, commands run, evidence, failures, and residual risks.
+
+## How it works
+
+```text
+User invokes $agent-orchestration-skill
+        ↓
+Root orchestrator classifies the task
+        ↓
+Decides: no worker, one worker, or controlled multi-worker plan
+        ↓
+Preserves context in a Context Capsule
+        ↓
+Compiles scoped Dispatch Packets
+        ↓
+Spawns only useful leaf workers
+        ↓
+Workers pass Context Coverage, execute, validate, and hand off
+        ↓
+Handoffs are validated and merged into the Run Ledger
+        ↓
+Failures are classified before retry/replan/escalation
+        ↓
+Verification, re-audit, and PR-ready report
+```
+
+The core rule is simple:
+
+> Do not spawn more agents, pass more context, or use more reasoning than the task actually needs.
+
+## Context without token bloat
+
+The system separates **memory** from **prompt payload**.
+
+| Layer | Purpose | Token behavior |
+| --- | --- | --- |
+| `Context Capsule` | Persistent task-critical context | Stored on disk; not broadcast in full. |
+| `Dispatch Packet` | Worker-specific context slice | Short, scoped, and capped. |
+| `Context Coverage Gate` | Proof the worker read required context | Prevents blind edits. |
+| `Handoff Packet` | Structured worker result | Concise evidence, no raw logs. |
+| `Run Ledger` | Operational state for the run | Tracks phases, evidence, failures, and decisions. |
+| `Durable Notepads` | Reusable learnings | Saves only durable knowledge, not transcripts. |
+
+This prevents the common failure mode where every subagent receives a huge transcript but still misses the one file or decision that matters.
+
+## Reasoning policy
+
+Reasoning effort is selected by task depth, not by habit.
+
+| Reasoning | Use for | Avoid for |
+| --- | --- | --- |
+| `low` | scouting, file discovery, source checks, exact command execution | complex implementation or ambiguous debugging |
+| `medium` | normal code writing, small/medium fixes, batch implementation, browser QA, deep verification | architecture-heavy planning |
+| `high` | complex implementation, difficult business logic, security/data/concurrency-sensitive work | trivial patches and simple test runs |
+| `xhigh` | large architecture, feature structuring, critical ambiguity, deep planning | default implementation, one-file fixes, basic scouting |
+
+`xhigh` is intentionally rare. It is most useful for structuring difficult problems, not for routine edits.
+
+## Install
+
+Install the skill with the Agent Skills CLI:
+
+```bash
+npx skills add https://github.com/ZypherHQ/agent-orchestration-skill --skill "agent-orchestration-skill"
+```
+
+Or install all skills exposed by this repository:
 
 ```bash
 npx skills add https://github.com/ZypherHQ/agent-orchestration-skill
 ```
 
-Install only this skill by its `name:` field from frontmatter:
+This repository is designed to expose a single orchestration skill plus supporting references and deterministic utilities.
 
-```bash
-npx skills add https://github.com/ZypherHQ/agent-orchestration-skill --skill "agentic-orchestration-control"
+## Usage
+
+Invoke it explicitly when you want controlled orchestration:
+
+```text
+Use $agent-orchestration-skill for this task.
+
+Run in token-efficient control-plane mode.
+Preserve context with a Context Capsule.
+Spawn only useful leaf workers.
+Do not spawn one agent per file.
+Use low for scouting, medium for normal coding/testing, high for complex implementation, and xhigh only for large architecture/planning.
 ```
 
-You can also copy `skills/SKILL.md` into a repo or paste it directly into a Codex workflow when you want the orchestration policy without the installer.
+For small tasks, do not invoke the skill. A normal direct coding run is usually cheaper and cleaner.
 
-## Skill
+```text
+Fix the typo in src/lib.rs.
+Run cargo fmt --check.
+```
 
-This repository exposes one installable skill:
+## Workflow by task size
 
-| Skill file | Install name | Description |
-| --- | --- | --- |
-| `skills/SKILL.md` | `agentic-orchestration-control` | Root orchestrator only. Token-aware Codex workflow with leaf workers, DAG gating, state ledger, retry policy, and no nested delegation. |
+| Size | Typical behavior |
+| --- | --- |
+| `XS` | No subagents. Minimal direct workflow. No heavy ledger/DAG. |
+| `S` | Zero or one worker if useful. Targeted validation only. |
+| `M` | Small number of batched workers. Context Capsule + scoped dispatch. |
+| `L` | Run Ledger, DAG plan, Plan Gate, Budget Governor, multiple bounded phases. |
+| `XL` | Strategy planning, worktree isolation planning, strict budget checks, staged verification and re-audit. |
 
-The OpenAI-facing manifest at `skills/agents/openai.yaml` labels the skill as **Agentic Orchestration Control v3** and disables implicit invocation so it only runs when explicitly requested.
+## Worker contract
 
-## What It Enforces
+Every spawned worker is a leaf worker.
 
-- Root session only. Spawned workers must not invoke this skill, invoke repo skills, or spawn child agents.
-- No one-agent-per-file fan-out. Work is batched by surface, ownership, or user flow.
-- No `xhigh` by default. Reasoning effort must match ambiguity and risk.
-- No duplicate waves. Active or completed work should be resumed or reused before respawning.
-- No raw-log broadcast. Workers return compact Handoff Packets with evidence and blockers only.
-- No partial write workers. Implementation workers are expected to inspect, patch, validate, and hand off in one bounded loop.
-- No blind retries. Failures are classified before retry, replan, or escalation.
+Workers must:
 
-## Workflow
+- read the assigned Dispatch Packet;
+- inspect required files before editing;
+- pass Context Coverage before making changes;
+- execute a complete bounded loop: inspect → patch → validate → handoff;
+- return concise evidence and blockers;
+- escalate to the parent when context is missing or scope is unsafe.
 
-1. Classify the task by file count, surfaces, ambiguity, risk, verification needs, and parallel value.
-2. Pick the smallest orchestration mode that fits: `XS`, `S`, `M`, `L`, or `XL`.
-3. For non-trivial work, initialize a run ledger under `.orchestration/runs/<run_id>/`.
-4. For `M` and above, generate a compact dependency-aware DAG and reject it if the plan is not executable.
-5. Compile short Dispatch Packets for bounded leaf workers instead of broadcasting the full root plan.
-6. Run verification matched to scope, classify failures, and record durable learnings only when they will matter next time.
+Workers must not:
 
-## Repo Layout
+- invoke `$agent-orchestration-skill`;
+- invoke repo skills;
+- spawn child agents;
+- ask another worker to take over;
+- emit `target_agent`, `next_handoff`, or nested routing instructions;
+- broadcast raw logs as handoff content.
+
+## Repo layout
 
 | Path | Purpose |
 | --- | --- |
-| `skills/SKILL.md` | Main root-only skill contract and operating instructions. |
-| `skills/agents/openai.yaml` | Display metadata and explicit invocation policy for the skill. |
-| `skills/references/` | Focused policy notes for specific orchestration concerns. |
-| `skills/scripts/` | Deterministic helper scripts for planning, routing, gating, validation, and state. |
+| `skills/SKILL.md` | Root-only orchestration contract and operating instructions. |
+| `skills/agents/openai.yaml` | Skill metadata and explicit invocation policy. |
+| `skills/references/` | Focused policy references loaded only when needed. |
+| `skills/scripts/` | Deterministic utilities for planning, context, budget, validation, testing, and state. |
+| `workflow-diagram.png` | Visual overview shown at the top of this README. |
 
-## Scripts
+## Utilities
 
-These utilities are deliberately model-free. They provide deterministic structure around the orchestration flow.
+The scripts are model-free helpers that keep the orchestration flow structured and auditable.
 
 | Script | Purpose |
 | --- | --- |
-| `skills/scripts/orchestration_decider.py` | Recommends task size, reasoning effort, default agent set, and verification level from task metadata. |
-| `skills/scripts/batch_tasks.py` | Groups files or tasks into fewer implementation batches by surface and ownership. |
-| `skills/scripts/budget_governor.py` | Applies a simple point budget to catch obvious over-orchestration before spawning. |
-| `skills/scripts/dag_planner.py` | Builds a compact phase DAG for `M/L/XL` work. |
-| `skills/scripts/plan_gate.py` | Rejects plans that are vague, invalid, circular, or missing worker policy and verification. |
-| `skills/scripts/dispatch_compiler.py` | Compiles short Dispatch Packets for subagents from explicit packet fields or JSON. |
-| `skills/scripts/run_ledger.py` | Creates and updates the persistent run ledger under `.orchestration/runs/`. |
-| `skills/scripts/handoff_validate.py` | Validates Handoff Packets for required fields, forbidden routing text, and excessive length. |
-| `skills/scripts/handoff_router.py` | Merges multiple handoffs and detects overlapping file ownership. |
-| `skills/scripts/failure_classifier.py` | Maps failure text to retry, fix, escalation, or replan actions. |
-| `skills/scripts/test_matrix.py` | Detects common project lint, typecheck, test, build, and docker verification commands. |
-| `skills/scripts/quality_gate.py` | Executes verification commands and writes JSON plus Markdown evidence reports. |
-| `skills/scripts/worktree_guard.py` | Plans or creates isolated git worktrees for larger or dirty-checkout runs. |
-| `skills/scripts/notepad.py` | Appends compact durable learnings, decisions, issues, or verification notes. |
-| `skills/scripts/token_budget_linter.py` | Lints installed repo skills, worker agent configs, and stale orchestration patterns. |
-| `skills/scripts/codex_leaf_exec.sh` | Launches `codex exec` in hard leaf-worker mode with multi-agent tools disabled. |
+| `orchestration_decider.py` | Recommends task size, reasoning effort, agent count, and verification level. |
+| `context_capsule.py` | Creates, updates, renders, slices, and measures the persistent Context Capsule. |
+| `dispatch_compiler.py` | Builds short scoped Dispatch Packets from explicit fields or JSON. |
+| `context_coverage_gate.py` | Checks whether a worker covered required context before editing. |
+| `batch_tasks.py` | Groups related files/tasks to avoid one-agent-per-file fan-out. |
+| `budget_governor.py` | Flags over-orchestration before spawning workers. |
+| `dag_planner.py` | Builds compact dependency-aware plans for larger tasks. |
+| `plan_gate.py` | Rejects invalid, vague, circular, or unverifiable plans. |
+| `run_ledger.py` | Creates and updates `.orchestration/runs/<run_id>/` state. |
+| `handoff_validate.py` | Validates handoffs for required fields, coverage, evidence, and forbidden routing. |
+| `handoff_router.py` | Merges handoffs and detects overlapping file ownership. |
+| `failure_classifier.py` | Maps failures to retry, fix, replan, or escalation. |
+| `test_matrix.py` | Detects common lint, typecheck, build, test, docker, and browser verification commands. |
+| `quality_gate.py` | Runs verification commands and writes JSON/Markdown evidence. |
+| `worktree_guard.py` | Plans or creates isolated git worktrees for large or dirty-checkout work. |
+| `notepad.py` | Stores compact durable learnings, decisions, issues, and verification notes. |
+| `token_budget_linter.py` | Detects stale always-on orchestration patterns and token-heavy config. |
+| `codex_leaf_exec.sh` | Launches `codex exec` in hard leaf-worker mode with multi-agent tools disabled. |
 
-### Example commands
+## Example commands
 
 Classify a task:
 
@@ -111,10 +241,23 @@ python skills/scripts/orchestration_decider.py \
   --ambiguity medium
 ```
 
-Create a ledger entry:
+Create a Context Capsule:
 
 ```bash
-python skills/scripts/run_ledger.py init --task "fix flaky checkout flow"
+python skills/scripts/context_capsule.py init \
+  --task "fix flaky checkout flow" \
+  --out .orchestration/context_capsule.json
+```
+
+Compile a scoped Dispatch Packet:
+
+```bash
+python skills/scripts/dispatch_compiler.py \
+  --task "fix checkout retry state" \
+  --must-read src/checkout.ts tests/checkout.spec.ts \
+  --acceptance "retry state is reset after successful payment" \
+  --validation "npm run test -- checkout" \
+  --capsule .orchestration/context_capsule.json
 ```
 
 Generate and gate a plan:
@@ -129,60 +272,73 @@ python skills/scripts/dag_planner.py \
 python skills/scripts/plan_gate.py .orchestration/plan.json
 ```
 
-Discover likely verification commands:
-
-```bash
-python skills/scripts/test_matrix.py --root .
-```
-
 Run a quality gate:
 
 ```bash
 python skills/scripts/quality_gate.py "npm run test" "npm run build"
 ```
 
-## References
+Run a Codex verifier as a hard leaf worker:
 
-The reference files are intentionally short and specialized. They exist so the root session can load only the policy needed for the current situation.
+```bash
+skills/scripts/codex_leaf_exec.sh . \
+  "LEAF_EXEC_MODE. Run the requested verification commands only. Do not edit files except normal build artifacts. Return a concise YAML Handoff Packet."
+```
+
+## References
 
 | Reference file | Focus |
 | --- | --- |
-| `skills/references/control-plane.md` | Run ledger structure, event tracking, and durable notes. |
-| `skills/references/dag-plan-gate.md` | Compact DAG requirements and executable-plan gate rules. |
-| `skills/references/dispatch-packet.md` | Required Dispatch Packet fields and context-diet rules. |
-| `skills/references/evaluation-harness.md` | Smoke-test scenarios for the orchestration system itself. |
-| `skills/references/exec-leaf-mode.md` | Hard leaf-mode launch pattern for `codex exec` verification jobs. |
-| `skills/references/failure-recovery.md` | Retry caps and escalation policy for repeated failures. |
-| `skills/references/leaf-worker-boundary.md` | Multi-layer containment policy for spawned workers. |
-| `skills/references/session-lifecycle.md` | Resume-vs-respawn policy and duplicate-spawn checks. |
-| `skills/references/skill-scope-policy.md` | Why workers must not activate repo skills or orchestration internals. |
-| `skills/references/source-contract-proof.md` | Contract-first rule for local source and upstream docs. |
-| `skills/references/spawn-economics.md` | Cost model and default agent caps by task size. |
-| `skills/references/test-gate.md` | Verification expectations for `XS/S`, `M`, and `L/XL` work. |
-| `skills/references/thinking-router.md` | Reasoning-effort selection rules and anti-patterns. |
-| `skills/references/wisdom-notepads.md` | Rules for durable notes instead of transcript bloat. |
-| `skills/references/worker-contract.md` | Expected loop and handoff structure for read/write workers. |
-| `skills/references/worktree-isolation.md` | When to plan or create isolated git worktrees. |
+| `control-plane.md` | Run ledger, event tracking, evidence, and durable notes. |
+| `context-capsule.md` | Context preservation without full-context broadcast. |
+| `context-coverage-gate.md` | Required file/context coverage before edits. |
+| `dag-plan-gate.md` | Compact DAG requirements and executable-plan checks. |
+| `dispatch-packet.md` | Scoped worker instructions and context-diet rules. |
+| `exec-leaf-mode.md` | Hard leaf-mode pattern for `codex exec` verification jobs. |
+| `failure-recovery.md` | Retry caps, replan, and escalation policy. |
+| `leaf-worker-boundary.md` | Multi-layer containment for spawned workers. |
+| `session-lifecycle.md` | Resume-vs-respawn policy and duplicate-spawn checks. |
+| `skill-scope-policy.md` | Why workers must not activate repo skills. |
+| `spawn-economics.md` | Cost model and default worker caps by task size. |
+| `test-gate.md` | Verification expectations by task size and risk. |
+| `thinking-router.md` | Reasoning-effort selection and anti-patterns. |
+| `wisdom-notepads.md` | Durable notes instead of transcript bloat. |
+| `worker-contract.md` | Expected worker loop and handoff structure. |
+| `worktree-isolation.md` | When to plan or create isolated git worktrees. |
 
-## Common Questions
+## FAQ
 
-**What problem does this solve?**  
-It gives a Codex root session a disciplined control plane so multi-step work does not collapse into recursive delegation, oversized prompts, duplicate agents, or weak verification.
+### Does the skill run automatically?
 
-**Can a spawned worker use this skill?**  
-No. The entire design assumes the skill is root-only and workers receive only a bounded Dispatch Packet.
+No. It is designed for explicit invocation only:
 
-**Do the scripts call models?**  
-No. The scripts are deterministic utilities for classification, planning, validation, state, and evidence handling.
+```text
+Use $agent-orchestration-skill for this task.
+```
 
-**When should I create a ledger and DAG?**  
-Usually for `M`, `L`, and `XL` tasks. Tiny `XS/S` work should stay lightweight unless there is a real need for persistent state.
+### Does this replace normal coding runs?
 
-**What is the safest way to run `codex exec` as a verifier?**  
-Use `skills/scripts/codex_leaf_exec.sh`, which disables multi-agent tools and caps the exec process as a leaf worker.
+No. It is for tasks that benefit from controlled orchestration. Small single-file changes are often better handled directly.
 
-**Does this repo include multiple installable skills?**  
-No. It exposes one orchestration skill plus supporting references and tooling.
+### Can a spawned worker use the skill?
+
+No. The skill is root-only. Workers receive scoped Dispatch Packets and must remain leaf workers.
+
+### Does the Context Capsule increase token usage?
+
+Not when used correctly. The full capsule is stored on disk. Workers receive only a short relevant slice, plus required files and acceptance criteria.
+
+### Do the scripts call models?
+
+No. They are deterministic utilities for classification, planning, budget checks, validation, state, and evidence handling.
+
+### Why not spawn one agent per file?
+
+Because it usually wastes tokens and fragments ownership. This skill prefers batched work by surface, module, user flow, or implementation owner.
+
+### When should I use `xhigh` reasoning?
+
+Only for unusually large, ambiguous, or architecture-heavy problems. It should not be the default for implementation, testing, or file discovery.
 
 ## License
 
