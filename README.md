@@ -24,7 +24,8 @@
     <a href="#why-this-exists">Why</a> ·
     <a href="#what-it-does">Features</a> ·
     <a href="#how-it-works">Workflow</a> ·
-    <a href="#install">Install</a> ·
+|    <a href="#install">Install</a> ·
+    <a href="#quick-start">Quick Start</a> ·
     <a href="#usage">Usage</a> ·
     <a href="#repo-layout">Repo Layout</a> ·
     <a href="#utilities">Utilities</a> ·
@@ -141,6 +142,81 @@ npx skills add https://github.com/ZypherHQ/agent-orchestration-skill
 ```
 
 This repository is designed to expose a single orchestration skill plus supporting references and deterministic utilities.
+
+## Quick Start
+
+This skill is designed for tasks that benefit from controlled multi-agent orchestration — not for every change. Use it when the work is complex enough to need multiple workers, scoped context, and verifiable handoffs.
+
+### Classify your task first
+
+Before invoking the skill, classify the task size:
+
+```bash
+python skills/scripts/orchestration_decider.py \
+  --task "implement user authentication flow" \
+  --known-files 12 \
+  --surfaces frontend,backend,tests \
+  --risk medium \
+  --ambiguity low
+```
+
+The decider outputs a recommended task size (`XS`–`XL`), reasoning effort, and worker count. For `XS` and `S` tasks, you often don't need the skill at all.
+
+### Run a medium task with orchestration
+
+Once you have a task that warrants orchestration:
+
+**1. Initialize a Context Capsule** to preserve task-critical context:
+
+```bash
+python skills/scripts/context_capsule.py init \
+  --task "implement user authentication flow" \
+  --out .orchestration/context_capsule.json
+```
+
+**2. Plan with a DAG** for tasks involving multiple surfaces:
+
+```bash
+python skills/scripts/dag_planner.py \
+  --task "implement user authentication flow" \
+  --size M \
+  --surfaces frontend,backend,tests \
+  --out .orchestration/plan.json
+```
+
+**3. Gate the plan** before spawning workers:
+
+```bash
+python skills/scripts/plan_gate.py .orchestration/plan.json
+```
+
+**4. Compile a Dispatch Packet** for each worker:
+
+```bash
+python skills/scripts/dispatch_compiler.py \
+  --task "backend auth endpoints" \
+  --must-read backend/auth.go backend/auth_test.go \
+  --acceptance "POST /auth/login returns 200 with token" \
+  --validation "go test ./backend/... -run Auth" \
+  --capsule .orchestration/context_capsule.json
+```
+
+**5. Run a quality gate** after workers complete:
+
+```bash
+python skills/scripts/quality_gate.py "go test ./..." "go build ./..."
+```
+
+### Small tasks — skip the skill
+
+For `XS` and `S` tasks, direct coding is cheaper and cleaner:
+
+```
+Fix the typo in src/lib.rs.
+Run cargo fmt --check.
+```
+
+The skill is explicit-only. It does not activate unless you invoke `$agent-orchestration-skill`.
 
 ## Usage
 
