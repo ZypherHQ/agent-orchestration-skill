@@ -1,0 +1,136 @@
+name: CI
+
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Install ShellCheck
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck
+
+      - name: Run ShellCheck
+        shell: bash
+        run: |
+          scripts=()
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              *.sh|*.bash)
+                scripts+=("$path")
+                continue
+                ;;
+            esac
+
+            if IFS= read -r first_line < "$path" && [[ "$first_line" == '#!'* ]]; then
+              case "$first_line" in
+                *sh|*sh\ *|*bash|*bash\ *)
+                  scripts+=("$path")
+                  ;;
+              esac
+            fi
+          done < <(
+            find . -type f \
+              -not -path './.git/*' \
+              -not -path './node_modules/*' \
+              -not -path './dist/*' \
+              -print0
+          )
+
+          if ((${#scripts[@]} == 0)); then
+            echo "No shell scripts found."
+            exit 0
+          fi
+
+          shellcheck -x "${scripts[@]}"
+
+  python-sanity:
+    name: Python Syntax Sanity
+    runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Check Python syntax without bytecode
+        run: |
+          python3 - <<'PY'
+          import ast
+          import pathlib
+          import sys
+
+          excluded_dirs = {".git", "node_modules", "dist", "__pycache__"}
+          failures = []
+          files = [
+              path
+              for path in pathlib.Path(".").rglob("*.py")
+              if not any(part in excluded_dirs for part in path.parts)
+          ]
+
+          for path in files:
+              try:
+                  ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+              except SyntaxError as exc:
+                  failures.append(f"{path}:{exc.lineno}:{exc.offset}: {exc.msg}")
+
+          if failures:
+              print("\n".join(failures), file=sys.stderr)
+              sys.exit(1)
+
+          print(f"Parsed {len(files)} Python file(s).")
+          PY
+
+  package-validation:
+    name: Package Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Run tests
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: npm test
+
+      - name: Validate npm CLI
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: npm run test:npm-cli
+
+      - name: Run publish check
+        run: npm run publish:check
+
+      - name: Validate npm package contents
+        run: npm pack --dry-run --json

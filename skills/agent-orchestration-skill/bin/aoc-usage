@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+CONTROL="$(dirname "${BASH_SOURCE[0]}")/agentic-orchestration-control"
+if [[ ! -x "$CONTROL" ]]; then
+  echo "Missing executable wrapper: $CONTROL" >&2
+  exit 1
+fi
+if [[ $# -eq 0 || "${1:-}" == -* ]]; then
+  exec "$CONTROL" usage "$@"
+else
+  exec "$CONTROL" "$@"
+fi

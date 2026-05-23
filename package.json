@@ -1,0 +1,58 @@
+{
+  "name": "agentic-orchestration-control",
+  "version": "0.1.0",
+  "private": false,
+  "description": "npx-first TUI/GUI control room and token-aware orchestration skill for Codex subagents.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "agentic-orchestration-control": "./bin/aoc.mjs",
+    "agent-orchestration-control": "./bin/aoc.mjs",
+    "aoc": "./bin/aoc.mjs",
+    "aoc-gui": "./bin/aoc.mjs",
+    "aoc-usage": "./bin/aoc.mjs"
+  },
+  "scripts": {
+    "fix:permissions": "node tools/fix-permissions.mjs",
+    "test": "node tools/fix-permissions.mjs --quiet && PYTHONDONTWRITEBYTECODE=1 python3 tests/aggressive_validation.py",
+    "test:npm-cli": "node tools/fix-permissions.mjs --quiet && PYTHONDONTWRITEBYTECODE=1 node tests/npm_cli_validation.mjs",
+    "pack:dry": "npm pack --dry-run",
+    "doctor": "npm run publish:check",
+    "publish:check": "node tools/fix-permissions.mjs --quiet && node bin/aoc.mjs publish-check --pack-dry-run",
+    "validate:production": "node tools/fix-permissions.mjs --quiet && npm test && npm run publish:check && npm pack --dry-run",
+    "prepublishOnly": "npm run validate:production"
+  },
+  "files": [
+    "bin/",
+    "tools/",
+    "skills/",
+    "subagents/",
+    "docs/",
+    "AGENTS.md",
+    "install.sh",
+    "README.md",
+    "VALIDATION.md",
+    "SKILL_PACK_MANIFEST.json",
+    "workflow-diagram.png",
+    "tests/",
+    "LICENSE",
+    "!**/__pycache__/",
+    "!**/__pycache__/**",
+    "!**/*.pyc",
+    "!**/*.pyo"
+  ],
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZypherHQ/agent-orchestration-skill.git"
+  },
+  "homepage": "https://github.com/ZypherHQ/agent-orchestration-skill#readme",
+  "bugs": {
+    "url": "https://github.com/ZypherHQ/agent-orchestration-skill/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

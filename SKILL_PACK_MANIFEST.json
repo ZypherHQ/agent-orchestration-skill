@@ -1,0 +1,29 @@
+{
+  "package": "agentic-orchestration-control",
+  "repository": "https://github.com/ZypherHQ/agent-orchestration-skill",
+  "layout": {
+    "skill": "skills/agent-orchestration-skill",
+    "subagents": "subagents",
+    "docs": "docs",
+    "runtime": ".orchestration"
+  },
+  "entrypoints": [
+    "agentic-orchestration-control",
+    "agent-orchestration-control",
+    "aoc",
+    "aoc-gui",
+    "aoc-usage"
+  ],
+  "production_guards": [
+    "explicit-only skill invocation",
+    "skills/ layout without leading dot",
+    "self-install source preservation",
+    "leaf-worker subagents",
+    "no public demo command",
+    "no hidden .skills/.agents/.codex payload",
+    "strict npm publish check",
+    "TUI/GUI snapshot validation",
+    "usage/budget validation",
+    "Codex app-server bridge is optional and safe by default"
+  ]
+}
