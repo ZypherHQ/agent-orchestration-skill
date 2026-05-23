@@ -126,6 +126,8 @@ Reasoning effort is selected by task depth, not by habit.
 
 ## Install
 
+**Prerequisites:** Node.js 18+ and npm.
+
 Install the skill with the Agent Skills CLI:
 
 ```bash
