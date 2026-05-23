@@ -21,14 +21,14 @@ npm run validate:production
 
 Scope:
 
-- Review `node bin/aoc.mjs --help` for command accuracy.
+- Review `npx --yes agentic-orchestration-control --help` for command accuracy.
 - Add missing examples only where they map to implemented routes.
 - Keep the help output short.
 
 Validation:
 
 ```bash
-node bin/aoc.mjs --help
+npx --yes agentic-orchestration-control --help
 npm run test:npm-cli
 ```
 
@@ -70,6 +70,7 @@ Scope:
 - Check `skills/agent-orchestration-skill/references/` against `SKILL.md`.
 - Remove stale references or add missing links from the skill body.
 - Keep reference pages focused on policy, not duplicate CLI reference.
+- Add public CLI routes before replacing low-level Python examples for internal-only scripts.
 
 Validation:
 

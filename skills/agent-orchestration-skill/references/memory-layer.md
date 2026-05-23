@@ -9,13 +9,18 @@ Layers:
 3. Durable Notepads / Wiki: reusable facts, decisions, known traps, verification notes.
 4. Memory Index: searchable summary of capsule, handoffs, evidence, and notes.
 
-Use `scripts/memory_index.py build` to create:
+Use the public CLI to create:
 
 ```text
 .orchestration/memory/index.json
 ```
 
-Use `scripts/memory_index.py search "query"` to inspect why something was remembered.
+Use the public CLI to inspect why something was remembered:
+
+```bash
+aoc memory build --run-id latest
+aoc memory search "query"
+```
 
 Rules:
 

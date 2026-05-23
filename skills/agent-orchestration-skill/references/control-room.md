@@ -33,5 +33,5 @@ The TUI must not become a hidden orchestrator. It should observe state and write
 For non-interactive environments, use:
 
 ```bash
-agentic-orchestration-control --snapshot --repo .
+agentic-orchestration-control snapshot --repo .
 ```

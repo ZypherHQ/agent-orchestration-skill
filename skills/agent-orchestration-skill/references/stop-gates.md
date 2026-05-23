@@ -2,7 +2,13 @@
 
 STOP gates are user-visible control points. They prevent silent escalation, blind retries, and unnecessary token spend.
 
-Use `scripts/control_gate.py` to create or resolve gates.
+Use the public CLI to create, resolve, or enforce gates.
+
+```bash
+aoc gates --run-id latest
+aoc gates request --run-id latest --gate-id before_browser_qa --reason "UI flow changed"
+aoc gates enforce --run-id latest
+```
 
 Typical gates:
 

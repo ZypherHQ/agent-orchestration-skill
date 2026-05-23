@@ -27,19 +27,19 @@ Record usage per run, phase, worker, model, and reasoning tier when available:
 Use session reports to inspect one orchestration run:
 
 ```bash
-python skills/agent-orchestration-skill/scripts/usage_ledger.py report --run-id latest --scope-run --derive
+aoc usage --run-id latest
 ```
 
 Use source reports to separate imported usage from local estimates:
 
 ```bash
-python skills/agent-orchestration-skill/scripts/usage_ledger.py report --group-by source --derive
+aoc usage --group-by source
 ```
 
 Use statusline for compact TUI/sidebar display:
 
 ```bash
-python skills/agent-orchestration-skill/scripts/usage_ledger.py statusline --run-id latest
+aoc usage --run-id latest --statusline
 ```
 
 ## ccusage bridge
@@ -47,14 +47,14 @@ python skills/agent-orchestration-skill/scripts/usage_ledger.py statusline --run
 If `ccusage` is installed, import focused Codex session data:
 
 ```bash
-python skills/agent-orchestration-skill/scripts/ccusage_bridge.py run --source codex --report session --run-id latest
+aoc ccusage run --source codex --report session --run-id latest
 ```
 
 Or import an exported JSON file:
 
 ```bash
 ccusage codex session --json --offline > .orchestration/usage/ccusage-codex-session.json
-python skills/agent-orchestration-skill/scripts/ccusage_bridge.py import --input .orchestration/usage/ccusage-codex-session.json --run-id latest
+aoc ccusage import --input .orchestration/usage/ccusage-codex-session.json --run-id latest
 ```
 
 ## Budget policy
@@ -62,7 +62,7 @@ python skills/agent-orchestration-skill/scripts/ccusage_bridge.py import --input
 Before adding workers, broad verification, high reasoning, or xhigh strategy, check usage pressure:
 
 ```bash
-python skills/agent-orchestration-skill/scripts/usage_ledger.py budget --run-id latest --scope-run --derive --max-estimated-tokens 12000
+aoc budget 12000 --run-id latest
 ```
 
 If the check fails, reduce context, merge batches, reuse prior handoffs, or stop at a gate for human approval.

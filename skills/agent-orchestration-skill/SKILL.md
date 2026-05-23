@@ -28,6 +28,20 @@ codex exec --cd /path/to/repo --sandbox workspace-write \
 
 Act as a **task compiler, context-preserving control-plane operator, and event-driven run supervisor**, not a prompt broadcaster. Classify the work, preserve the essential context, choose the cheapest adequate reasoning tier, batch related actions, compile minimal Dispatch Packets, track state, and collect concise Handoff Packets. The Context Capsule is persistent storage; a Dispatch Packet is only a small scoped slice for one worker. The capsule stays on disk; workers receive only the narrow slice they need.
 
+## Command surface
+
+For normal project use, prefer the public CLI:
+
+```bash
+npx --yes agentic-orchestration-control --help
+npx --yes agentic-orchestration-control install .
+npx --yes agentic-orchestration-control init --repo . --task "<task>"
+npx --yes agentic-orchestration-control tui --repo .
+npx --yes agentic-orchestration-control gui --repo .
+```
+
+The direct `python skills/agent-orchestration-skill/scripts/*.py` examples below are low-level internal control-plane commands for the root skill operator. Use them only when the public `aoc`/`agentic-orchestration-control` route does not expose the required operation.
+
 ## Hard constraints
 
 1. **Root-only skill:** subagents receive plain dispatch text, not skill names.
@@ -265,12 +279,12 @@ Open the local control-room TUI or GUI when the user asks to inspect orchestrati
 ```bash
 aoc
 # or
-npx agentic-orchestration-control
+npx --yes agentic-orchestration-control
 
 # GUI
 aoc gui
 # or
-npx agentic-orchestration-control gui
+npx --yes agentic-orchestration-control gui
 ```
 
 Initialize a production run ledger when the user explicitly asks to start an observable orchestration session before work begins:

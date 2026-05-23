@@ -24,8 +24,8 @@ Start here when you need more than the top-level quickstart.
 Use the code and package metadata as the source of truth:
 
 ```bash
-node bin/aoc.mjs --help
-node bin/aoc.mjs version
+npx --yes agentic-orchestration-control --help
+npx --yes agentic-orchestration-control --version
 npm run validate:production
 ```
 

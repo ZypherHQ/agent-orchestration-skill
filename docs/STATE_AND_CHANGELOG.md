@@ -55,6 +55,12 @@ Added the focused `/docs` set:
 - `docs/PR_CANDIDATES.md`: reviewable contributor PR slices.
 - `docs/SECURITY_MODEL.md`: local state, GUI, and command execution risks.
 
+Latest command-docs audit:
+
+- Public user docs now prefer `npx --yes agentic-orchestration-control ...` and `aoc ...` commands instead of source-tree router examples.
+- GUI examples document both `/api/snapshot` JSON reads and the `/events` SSE stream for realtime inspection.
+- Internal skill references still keep direct bundled Python commands where no public CLI route exists; `SKILL.md` labels those as low-level control-plane operations.
+
 ## Baseline Before This Change
 
 Existing top-level docs already covered:

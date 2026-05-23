@@ -1,14 +1,14 @@
 # Usage Examples
 
-These examples assume you are in the repository root.
+These examples assume `npm` is available. Use `npx --yes agentic-orchestration-control`
+from any repository where you want to install or inspect the control plane.
 
 ## Install Into A Repo
 
-Install the skill pack into another repository:
+Install the skill pack into a repository:
 
 ```bash
-npx --yes --package ./dist/agentic-orchestration-control-0.1.0.tgz \
-  agentic-orchestration-control install /path/to/repo
+npx --yes agentic-orchestration-control install /path/to/repo
 ```
 
 Expected result:
@@ -41,7 +41,10 @@ Prompts without `$agent-orchestration-skill` should run in normal mode.
 Create an observable run:
 
 ```bash
-node bin/aoc.mjs init --repo . --run-id smoke --task "smoke validation"
+npx --yes agentic-orchestration-control init \
+  --repo . \
+  --run-id smoke \
+  --task "smoke validation"
 ```
 
 Expected result:
@@ -55,7 +58,7 @@ Expected result:
 Print a non-interactive control-room snapshot:
 
 ```bash
-node bin/aoc.mjs snapshot --repo . --run-id smoke
+npx --yes agentic-orchestration-control snapshot --repo . --run-id smoke
 ```
 
 Expected output includes:
@@ -67,7 +70,7 @@ Agentic Orchestration Control
 Open the live TUI:
 
 ```bash
-node bin/aoc.mjs tui --repo . --run-id smoke
+npx --yes agentic-orchestration-control tui --repo . --run-id smoke
 ```
 
 Useful controls include pause, manual refresh, refresh interval, tab selection, and run selection. Use `--rebuild-index` only when you intentionally want to rebuild `.orchestration/index.json` before reading.
@@ -77,13 +80,16 @@ Useful controls include pause, manual refresh, refresh interval, tab selection, 
 Render one HTML snapshot:
 
 ```bash
-node bin/aoc.mjs gui --repo . --run-id smoke --once > /tmp/aoc-smoke.html
+npx --yes agentic-orchestration-control gui \
+  --repo . \
+  --run-id smoke \
+  --once > /tmp/aoc-smoke.html
 ```
 
 Run the local server:
 
 ```bash
-node bin/aoc.mjs gui --repo . --run-id smoke
+npx --yes agentic-orchestration-control gui --repo . --run-id smoke
 ```
 
 > Note: The GUI is local-only by default. Use `--allow-remote` and an auth token only when you intentionally expose it beyond localhost.
@@ -91,13 +97,24 @@ node bin/aoc.mjs gui --repo . --run-id smoke
 Expose the GUI remotely only with an auth token:
 
 ```bash
-AOC_GUI_TOKEN=replace-me node bin/aoc.mjs gui --repo . --run-id smoke --allow-remote
+AOC_GUI_TOKEN=replace-me \
+  npx --yes agentic-orchestration-control gui \
+  --repo . \
+  --run-id smoke \
+  --allow-remote \
+  --auth-token "$AOC_GUI_TOKEN"
 ```
 
 Fetch JSON from the local GUI API:
 
 ```bash
-curl -H "Authorization: Bearer replace-me" http://127.0.0.1:8787/api/state
+curl -H "Authorization: Bearer replace-me" http://127.0.0.1:8787/api/snapshot
+```
+
+Watch the realtime SSE stream from a shell:
+
+```bash
+curl -N -H "Authorization: Bearer replace-me" "http://127.0.0.1:8787/events?run=smoke"
 ```
 
 ## Check Usage And Budget
@@ -105,13 +122,13 @@ curl -H "Authorization: Bearer replace-me" http://127.0.0.1:8787/api/state
 Show derived run usage:
 
 ```bash
-node bin/aoc.mjs usage --repo . --run-id smoke
+npx --yes agentic-orchestration-control usage --repo . --run-id smoke
 ```
 
 Check an estimated-token budget:
 
 ```bash
-node bin/aoc.mjs budget 12000 --repo . --run-id smoke
+npx --yes agentic-orchestration-control budget 12000 --repo . --run-id smoke
 ```
 
 Expected output includes either:
@@ -131,14 +148,14 @@ FAIL
 Show current gate status:
 
 ```bash
-node bin/aoc.mjs gates --repo . --run-id smoke
+npx --yes agentic-orchestration-control gates --repo . --run-id smoke
 ```
 
-Request a gate directly through the bundled script:
+Request a gate:
 
 ```bash
-python3 skills/agent-orchestration-skill/scripts/control_gate.py request \
-  --root . \
+npx --yes agentic-orchestration-control gates request \
+  --repo . \
   --run-id smoke \
   --gate-id browser-qa \
   --reason "UI flow changed"
@@ -149,13 +166,13 @@ python3 skills/agent-orchestration-skill/scripts/control_gate.py request \
 Build the memory index:
 
 ```bash
-node bin/aoc.mjs memory build --repo . --run-id smoke
+npx --yes agentic-orchestration-control memory build --repo . --run-id smoke
 ```
 
 Search it:
 
 ```bash
-node bin/aoc.mjs memory search "handoff" --repo .
+npx --yes agentic-orchestration-control memory search "handoff" --repo .
 ```
 
 ## Validate Before Publish

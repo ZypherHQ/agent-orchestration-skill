@@ -1,6 +1,8 @@
 # Setup And Baseline
 
-Use this guide to get from a clean checkout to a validated local package.
+Use this guide to get from a clean checkout to a validated local package. If
+you only want to use the published package, prefer the `npx --yes
+agentic-orchestration-control ...` commands shown in `USAGE_EXAMPLES.md`.
 
 ## Prerequisites
 
@@ -128,13 +130,16 @@ dist/agentic-orchestration-control-<version>.tgz
 Create a run ledger:
 
 ```bash
-node bin/aoc.mjs init --repo . --run-id baseline --task "baseline smoke"
+npx --yes agentic-orchestration-control init \
+  --repo . \
+  --run-id baseline \
+  --task "baseline smoke"
 ```
 
 Render a snapshot:
 
 ```bash
-node bin/aoc.mjs snapshot --repo . --run-id baseline
+npx --yes agentic-orchestration-control snapshot --repo . --run-id baseline
 ```
 
 Expected output includes:
@@ -152,6 +157,6 @@ Agentic Orchestration Control
 | Executable permission failures | Files lost executable bits after archive/copy. | Run `npm run fix:permissions`. |
 | Publish check rejects `__pycache__` or `*.pyc` | Python bytecode exists in the package tree. | Remove bytecode artifacts before publish validation. |
 | Install moves legacy layouts | Installer found `.skills/`, `.agents/`, or `.codex/agents`. | Check `.orchestration-backup-*` and confirm the new `skills/` layout. |
-| GUI command appears to hang | `gui` starts a local server unless `--once` is used. | Use `node bin/aoc.mjs gui --once > /tmp/aoc.html` for a static snapshot. |
+| GUI command appears to hang | `gui` starts a local server unless `--once` is used. | Use `npx --yes agentic-orchestration-control gui --once > /tmp/aoc.html` for a static snapshot. |
 | GUI refuses remote bind | Remote exposure needs an explicit token. | Pass `--allow-remote` with `--auth-token` or `AOC_GUI_TOKEN`. |
 | TUI index looks stale | Index rebuilds are explicit. | Rerun with `--rebuild-index` when you want to refresh `.orchestration/index.json`. |
