@@ -1,26 +1,32 @@
 # Usage Examples
 
-These examples assume `npm` is available. Use `npx --yes agentic-orchestration-control`
-from any repository where you want to install or inspect the control plane.
-
-## Install Into A Repo
-
-Install the skill pack into a repository:
+These examples use the short `aoc` command after installing the package into a repository:
 
 ```bash
-npx --yes agentic-orchestration-control install /path/to/repo
+npx --yes agentic-orchestration-control install .
 ```
 
-Expected result:
+If `aoc` is not on `PATH`, use the local shim:
 
-```text
-/path/to/repo/skills/agent-orchestration-skill/
-/path/to/repo/subagents/
-/path/to/repo/.orchestration/bin/aoc
-/path/to/repo/AGENTS.md
+```bash
+./.orchestration/bin/aoc
 ```
 
-> Note: Installing into a repo with legacy `.skills/`, `.agents/skills/agent-orchestration-skill`, or `.codex/agents` paths backs them up under `.orchestration-backup-*`.
+## Open Before A Run Exists
+
+Open the terminal control room:
+
+```bash
+aoc
+```
+
+Open the GUI:
+
+```bash
+aoc gui
+```
+
+Expected behavior before any AOC run exists: the UI renders an empty state and any discoverable imported Codex sessions. It should not require `aoc init`.
 
 ## Use The Explicit Skill
 
@@ -36,71 +42,137 @@ Preserve context with a scoped Context Capsule.
 
 Prompts without `$agent-orchestration-skill` should run in normal mode.
 
-## Initialize A Run Ledger
+## Initialize A Run
 
-Create an observable run:
+Create an observable run with a generated unique run id:
 
 ```bash
-npx --yes agentic-orchestration-control init \
-  --repo . \
-  --run-id smoke \
-  --task "smoke validation"
+aoc init "Fix checkout flow"
+```
+
+Machine-readable form:
+
+```bash
+aoc init "Fix checkout flow" --json
 ```
 
 Expected result:
 
 ```text
-.orchestration/runs/smoke/state.json
+.orchestration/runs/<generated_run_id>/state.json
 ```
 
-## Render A Snapshot
+## List And Select Sessions
+
+List native AOC runs and imported Codex sessions:
+
+```bash
+aoc sessions
+aoc sessions --json
+```
+
+Show the selected run:
+
+```bash
+aoc current
+aoc current --json
+```
+
+Select a run:
+
+```bash
+aoc use <run_id>
+```
+
+## Import Codex Sessions
+
+Import local Codex rollout logs:
+
+```bash
+aoc import
+```
+
+Use a fake or alternate Codex home:
+
+```bash
+AOC_CODEX_HOME=/tmp/fake-codex aoc import --json
+```
+
+The importer reads:
+
+```text
+sessions/YYYY/MM/DD/rollout-*.jsonl
+```
+
+Imported sessions appear in:
+
+```bash
+aoc sessions
+aoc
+aoc gui
+```
+
+## Render Snapshots
 
 Print a non-interactive control-room snapshot:
 
 ```bash
-npx --yes agentic-orchestration-control snapshot --repo . --run-id smoke
+aoc
 ```
 
-Expected output includes:
-
-```text
-Agentic Orchestration Control
-```
-
-Open the live TUI:
+Render one HTML GUI snapshot:
 
 ```bash
-npx --yes agentic-orchestration-control tui --repo . --run-id smoke
+aoc gui --once > /tmp/aoc.html
 ```
 
-Useful controls include pause, manual refresh, refresh interval, tab selection, and run selection. Use `--rebuild-index` only when you intentionally want to rebuild `.orchestration/index.json` before reading.
+## Check Usage And Budget
 
-## Open The Local GUI
-
-Render one HTML snapshot:
+Show derived run usage:
 
 ```bash
-npx --yes agentic-orchestration-control gui \
-  --repo . \
-  --run-id smoke \
-  --once > /tmp/aoc-smoke.html
+aoc usage
 ```
 
-Run the local server:
+Check an estimated-token budget:
 
 ```bash
-npx --yes agentic-orchestration-control gui --repo . --run-id smoke
+aoc budget 12000
 ```
 
-> Note: The GUI is local-only by default. Use `--allow-remote` and an auth token only when you intentionally expose it beyond localhost.
+Expected output includes either `PASS` or `FAIL`.
 
-Expose the GUI remotely only with an auth token:
+## Search Local State
+
+Search run state, events, handoffs, dispatches, evidence, memory notes, and imported Codex summaries:
+
+```bash
+aoc search "checkout"
+aoc search "checkout" --json
+```
+
+## Work With Gates
+
+Show current gate status:
+
+```bash
+aoc gates
+```
+
+Request a gate:
+
+```bash
+aoc gates request --gate-id browser-qa --reason "UI flow changed"
+```
+
+## Remote GUI Access
+
+The GUI is local-only by default. Expose it remotely only with an auth token:
 
 ```bash
 AOC_GUI_TOKEN=replace-me \
-  npx --yes agentic-orchestration-control gui \
-  --repo . \
-  --run-id smoke \
+  aoc gui \
+  --host 0.0.0.0 \
   --allow-remote \
   --auth-token "$AOC_GUI_TOKEN"
 ```
@@ -109,70 +181,6 @@ Fetch JSON from the local GUI API:
 
 ```bash
 curl -H "Authorization: Bearer replace-me" http://127.0.0.1:8787/api/snapshot
-```
-
-Watch the realtime SSE stream from a shell:
-
-```bash
-curl -N -H "Authorization: Bearer replace-me" "http://127.0.0.1:8787/events?run=smoke"
-```
-
-## Check Usage And Budget
-
-Show derived run usage:
-
-```bash
-npx --yes agentic-orchestration-control usage --repo . --run-id smoke
-```
-
-Check an estimated-token budget:
-
-```bash
-npx --yes agentic-orchestration-control budget 12000 --repo . --run-id smoke
-```
-
-Expected output includes either:
-
-```text
-PASS
-```
-
-or:
-
-```text
-FAIL
-```
-
-## Work With Gates
-
-Show current gate status:
-
-```bash
-npx --yes agentic-orchestration-control gates --repo . --run-id smoke
-```
-
-Request a gate:
-
-```bash
-npx --yes agentic-orchestration-control gates request \
-  --repo . \
-  --run-id smoke \
-  --gate-id browser-qa \
-  --reason "UI flow changed"
-```
-
-## Build And Search Memory
-
-Build the memory index:
-
-```bash
-npx --yes agentic-orchestration-control memory build --repo . --run-id smoke
-```
-
-Search it:
-
-```bash
-npx --yes agentic-orchestration-control memory search "handoff" --repo .
 ```
 
 ## Validate Before Publish
@@ -187,11 +195,10 @@ Expected checks:
 
 ```text
 npm test
+npm run test:npm-cli
 npm run publish:check
 npm pack --dry-run
 ```
-
-> Note: Empty sandbox-mounted `.agents` or `.codex` directories are tolerated. Hidden directories with payload should still fail `publish-check`.
 
 ## Smoke Test The Tarball
 
@@ -203,17 +210,11 @@ tmp="$(mktemp -d)"
 git init -q "$tmp/repo"
 npx --yes --package ./dist/agentic-orchestration-control-0.1.0.tgz \
   agentic-orchestration-control install "$tmp/repo"
-npx --yes --package ./dist/agentic-orchestration-control-0.1.0.tgz \
-  agentic-orchestration-control init --repo "$tmp/repo" --run-id smoke --task "smoke"
-npx --yes --package ./dist/agentic-orchestration-control-0.1.0.tgz \
-  agentic-orchestration-control snapshot --repo "$tmp/repo" --run-id smoke
 ```
 
-Expected result:
+Then use the installed shim from that repo:
 
-```text
-skills/agent-orchestration-skill/
-subagents/
-.orchestration/bin/aoc
-AGENTS.md
+```bash
+"$tmp/repo/.orchestration/bin/aoc" init "Fix checkout flow" --json
+"$tmp/repo/.orchestration/bin/aoc" sessions --json
 ```

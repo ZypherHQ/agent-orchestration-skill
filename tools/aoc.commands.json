@@ -1,0 +1,62 @@
+{
+  "schema": "agentic-orchestration-control.commands.v1",
+  "version": 1,
+  "defaultCommand": "tui",
+  "repoResolution": [
+    "--repo/--root",
+    "AOC_REPO",
+    "nearest git/worktree root from cwd",
+    "cwd when it contains .orchestration, package.json, skills, or .git",
+    "clear error"
+  ],
+  "runResolution": [
+    "--run-id/--run",
+    "AOC_RUN_ID",
+    ".orchestration/current-run",
+    ".orchestration/current.json",
+    "latest .orchestration/runs/* state.json, including imported Codex session states",
+    "no run"
+  ],
+  "packageFiles": [
+    "tools/aoc.commands.json",
+    "bin/aoc.mjs",
+    "install.sh",
+    "skills/agent-orchestration-skill/bin/agentic-orchestration-control",
+    "skills/agent-orchestration-skill/bin/aoc",
+    "skills/agent-orchestration-skill/scripts/codex_session_cli.py"
+  ],
+  "globalOptions": [
+    { "name": "--repo", "aliases": ["--root"], "value": "path", "summary": "Repository to inspect or control." },
+    { "name": "--run-id", "aliases": ["--run"], "value": "id|current|latest", "summary": "Run or imported session to select." },
+    { "name": "--json", "summary": "Print machine-readable output where supported." },
+    { "name": "--quiet", "aliases": ["-q"], "summary": "Suppress non-essential output where supported." },
+    { "name": "--verbose", "summary": "Print extra diagnostics where supported." },
+    { "name": "--no-open", "summary": "Do not open browsers where supported." }
+  ],
+  "commands": [
+    { "name": "tui", "aliases": ["control", "dashboard"], "usage": "tui", "common": true, "summary": "Open the terminal control room (default).", "outputModes": ["text", "json"], "target": "scripts/aoc_tui.py" },
+    { "name": "gui", "aliases": ["web"], "usage": "gui", "common": true, "summary": "Open the local web GUI.", "outputModes": ["html", "server"], "target": "scripts/aoc_gui.py" },
+    { "name": "install", "usage": "install [repo]", "common": true, "summary": "Install the skill pack into a repo.", "outputModes": ["text"], "target": "install.sh", "installedShim": false },
+    { "name": "sessions", "aliases": ["session"], "usage": "sessions", "common": true, "summary": "List AOC runs and imported Codex sessions.", "outputModes": ["text", "json"], "target": "scripts/codex_session_cli.py sessions" },
+    { "name": "current", "usage": "current", "common": true, "summary": "Print the selected run.", "outputModes": ["text", "json"], "target": "scripts/codex_session_cli.py current" },
+    { "name": "use", "usage": "use <run|session|path>", "common": true, "summary": "Select an AOC run or import/select a Codex session.", "outputModes": ["text", "json"], "target": "scripts/codex_session_cli.py use" },
+    { "name": "import", "usage": "import [session|path|all]", "common": true, "summary": "Import Codex rollout JSONL sessions into .orchestration.", "outputModes": ["text", "json"], "target": "scripts/codex_session_cli.py import" },
+    { "name": "watch", "usage": "watch", "common": true, "summary": "Watch Codex rollout sessions and refresh imported runs.", "outputModes": ["text", "json"], "target": "scripts/codex_session_cli.py watch" },
+    { "name": "search", "usage": "search <query>", "common": true, "summary": "Search memory and imported Codex session artifacts.", "outputModes": ["text", "json"], "target": "scripts/codex_session_cli.py search" },
+    { "name": "usage", "aliases": ["report"], "usage": "usage", "common": true, "summary": "Show run-scoped usage report with derived pressure.", "outputModes": ["text", "json"], "target": "scripts/usage_ledger.py report" },
+    { "name": "budget", "usage": "budget [max]", "common": true, "summary": "Check usage budget (default max estimated tokens: 12000).", "outputModes": ["text", "json"], "target": "scripts/usage_ledger.py budget" },
+    { "name": "ccusage", "usage": "ccusage [doctor|run|import]", "common": true, "summary": "Bridge external ccusage JSON into the usage ledger.", "outputModes": ["text", "json"], "target": "scripts/ccusage_bridge.py" },
+    { "name": "codex", "usage": "codex [doctor|status|link|import|start-help]", "common": true, "summary": "Optional Codex app-server/codexui bridge.", "outputModes": ["text", "json"], "target": "scripts/codex_appserver_bridge.py" },
+    { "name": "codexui", "usage": "codexui", "common": true, "summary": "Show safe codexui helper commands.", "outputModes": ["text"], "target": "scripts/codex_appserver_bridge.py codexui" },
+    { "name": "init", "aliases": ["new-run"], "usage": "init \"task\"", "common": true, "summary": "Initialize a production run ledger.", "outputModes": ["json"], "target": "scripts/run_ledger.py init" },
+    { "name": "publish-check", "usage": "publish-check", "common": true, "summary": "Validate npm publish readiness.", "outputModes": ["text"], "target": "scripts/npm_publish_check.py" },
+    { "name": "stats", "usage": "stats", "common": true, "summary": "Show orchestration run statistics.", "outputModes": ["text", "json"], "target": "scripts/orchestration_stats.py" },
+    { "name": "events", "aliases": ["tail"], "usage": "events", "common": true, "summary": "Tail orchestration events.", "outputModes": ["text", "json"], "target": "scripts/event_tail.py" },
+    { "name": "memory", "usage": "memory [build|search]", "common": true, "summary": "Build/search memory index.", "outputModes": ["text", "json"], "target": "scripts/memory_index.py" },
+    { "name": "gates", "aliases": ["gate"], "usage": "gates", "common": true, "summary": "Manage STOP gates.", "outputModes": ["text", "json"], "target": "scripts/control_gate.py" },
+    { "name": "snapshot", "usage": "snapshot", "common": true, "summary": "Print non-interactive TUI snapshot.", "outputModes": ["text", "json"], "target": "scripts/aoc_tui.py --snapshot" },
+    { "name": "doctor", "usage": "doctor", "common": true, "summary": "Run local pack sanity checks.", "outputModes": ["text"], "target": "scripts/token_budget_linter.py" },
+    { "name": "help", "aliases": ["-h", "--help"], "usage": "help", "summary": "Print command help.", "outputModes": ["text"], "target": "bin/aoc.mjs" },
+    { "name": "version", "aliases": ["-v", "--version"], "usage": "version", "summary": "Print package version.", "outputModes": ["text"], "target": "bin/aoc.mjs", "installedShim": false }
+  ]
+}

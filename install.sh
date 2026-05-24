@@ -3,7 +3,7 @@ set -euo pipefail
 
 TARGET="${1:-}"
 if [[ -z "$TARGET" ]]; then
-  echo "Usage: ./install.sh /path/to/repo" >&2
+  echo "Usage: ./install.sh <repo>" >&2
   exit 1
 fi
 if [[ ! -d "$TARGET" ]]; then
@@ -134,108 +134,12 @@ cat > "$TARGET_DIR/.orchestration/bin/agentic-orchestration-control" <<'SHIM'
 #!/usr/bin/env bash
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPTS="$REPO_ROOT/skills/agent-orchestration-skill/scripts"
-
-need_cmd() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    echo "Missing dependency: $1. $2" >&2
-    exit 127
-  fi
-}
-
-run_py() {
-  local script="$1"
-  shift
-  need_cmd python3 "Install Python 3 and make sure python3 is on PATH."
-  if [[ ! -f "$SCRIPTS/$script" ]]; then
-    echo "Missing bundled script: $SCRIPTS/$script" >&2
-    exit 1
-  fi
-  exec python3 "$SCRIPTS/$script" "$@"
-}
-
-cmd="${1:-tui}"
-if [[ $# -gt 0 ]]; then
-  if [[ "$1" == "-h" || "$1" == "--help" ]]; then
-    cmd="$1"; shift
-  elif [[ "$1" != -* ]]; then
-    cmd="$1"; shift
-  else
-    cmd="tui"
-  fi
+CONTROL="$REPO_ROOT/skills/agent-orchestration-skill/bin/agentic-orchestration-control"
+if [[ ! -x "$CONTROL" ]]; then
+  echo "Missing executable wrapper: $CONTROL" >&2
+  exit 1
 fi
-case "$cmd" in
-  tui|control|dashboard)
-    run_py aoc_tui.py --repo "$REPO_ROOT" "$@" ;;
-  snapshot)
-    run_py aoc_tui.py --repo "$REPO_ROOT" --snapshot "$@" ;;
-  gui|web)
-    run_py aoc_gui.py --repo "$REPO_ROOT" "$@" ;;
-  init|new-run)
-    run_id_args=()
-    rest=()
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --run-id|--run)
-          if [[ $# -lt 2 ]]; then
-            echo "Missing value for $1" >&2
-            exit 2
-          fi
-          run_id_args=(--run-id "$2")
-          shift 2 ;;
-        --run-id=*)
-          run_id_args=(--run-id "${1#--run-id=}")
-          shift ;;
-        --run=*)
-          run_id_args=(--run-id "${1#--run=}")
-          shift ;;
-        *)
-          rest+=("$1")
-          shift ;;
-      esac
-    done
-    run_py run_ledger.py init --root "$REPO_ROOT" "${run_id_args[@]}" "${rest[@]}" ;;
-  usage|report)
-    run_py usage_ledger.py report --root "$REPO_ROOT" --run-id latest --scope-run --derive "$@" ;;
-  statusline)
-    run_py usage_ledger.py statusline --root "$REPO_ROOT" --run-id latest "$@" ;;
-  budget)
-    if [[ "${1:-}" =~ ^[0-9]+$ ]]; then max="$1"; shift; else max="12000"; fi
-    run_py usage_ledger.py budget --root "$REPO_ROOT" --run-id latest --scope-run --derive --max-estimated-tokens "$max" "$@" ;;
-  ccusage)
-    sub="${1:-doctor}"; if [[ $# -gt 0 ]]; then shift; fi
-    if [[ "$sub" == "doctor" ]]; then
-      run_py ccusage_bridge.py doctor "$@"
-    else
-      run_py ccusage_bridge.py "$sub" --root "$REPO_ROOT" "$@"
-    fi ;;
-  codex)
-    sub="${1:-doctor}"; if [[ $# -gt 0 ]]; then shift; fi
-    if [[ "$sub" == "doctor" || "$sub" == "start-help" ]]; then
-      run_py codex_appserver_bridge.py "$sub" "$@"
-    else
-      run_py codex_appserver_bridge.py "$sub" --root "$REPO_ROOT" --run-id latest "$@"
-    fi ;;
-  codexui)
-    run_py codex_appserver_bridge.py codexui --root "$REPO_ROOT" "$@" ;;
-  publish-check)
-    run_py npm_publish_check.py --root "$REPO_ROOT" "$@" ;;
-  stats)
-    run_py orchestration_stats.py --root "$REPO_ROOT" --run-id latest "$@" ;;
-  events|tail)
-    run_py event_tail.py --root "$REPO_ROOT" --run-id latest "$@" ;;
-  memory)
-    sub="${1:-build}"; if [[ $# -gt 0 ]]; then shift; fi
-    run_py memory_index.py "$sub" --root "$REPO_ROOT" "$@" ;;
-  gates|gate)
-    sub="${1:-status}"; if [[ $# -gt 0 ]]; then shift; fi
-    run_py control_gate.py "$sub" --root "$REPO_ROOT" "$@" ;;
-  doctor)
-    run_py token_budget_linter.py --root "$REPO_ROOT" "$@" ;;
-  help|-h|--help)
-    echo "Agentic Orchestration Control: tui, snapshot, gui, init, usage, budget, ccusage, codex, codexui, publish-check, stats, events, memory, gates, doctor" ;;
-  *) echo "Unknown command: $cmd" >&2; exit 2 ;;
-esac
+exec "$CONTROL" "$@"
 SHIM
 chmod +x "$TARGET_DIR/.orchestration/bin/agentic-orchestration-control"
 cp "$TARGET_DIR/.orchestration/bin/agentic-orchestration-control" "$TARGET_DIR/.orchestration/bin/aoc"

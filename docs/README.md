@@ -5,6 +5,7 @@ Start here when you need more than the top-level quickstart.
 ## Use The Package
 
 - [Setup and baseline](SETUP_AND_BASELINE.md): install prerequisites, run the first smoke test, and record the validation baseline.
+- [Command reference](COMMANDS.md): short `aoc` commands, repo/run resolution, global flags, and Codex session import.
 - [Usage examples](USAGE_EXAMPLES.md): copy-pasteable workflows for install, run ledgers, TUI/GUI, usage, gates, memory, and publish checks.
 - [Security model](SECURITY_MODEL.md): local state, logs, GUI exposure, and command execution risks.
 

@@ -23,6 +23,8 @@
     "no hidden .skills/.agents/.codex payload",
     "strict npm publish check",
     "TUI/GUI snapshot validation",
+    "short command contract validation",
+    "Codex session import validation",
     "usage/budget validation",
     "Codex app-server bridge is optional and safe by default"
   ]

@@ -22,7 +22,19 @@ from urllib.parse import parse_qs, quote, urlparse
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
-from aoc_tui import load_events, load_memory, load_plan, load_sessions, load_state, load_controls  # noqa: E402
+from aoc_tui import (  # noqa: E402
+    codex_homes,
+    discover_codex_sessions,
+    is_discovered_codex_state,
+    load_controls,
+    load_events,
+    load_memory,
+    load_plan,
+    load_sessions,
+    load_state,
+    session_path,
+    source_badge,
+)
 from event_emit import latest_run_id, read_json, rebuild_index, run_dir  # noqa: E402
 from orchestration_stats import run_stats  # noqa: E402
 from usage_ledger import aggregate as usage_aggregate, derive_from_run, load_records  # noqa: E402
@@ -33,6 +45,7 @@ CSS = """
 *{box-sizing:border-box}body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
 header{padding:18px 24px;border-bottom:1px solid var(--line);background:#fff;position:sticky;top:0;z-index:2}h1{margin:0;font-size:22px}header p{margin:6px 0 0;color:var(--muted);font-size:13px}.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--amber);margin-right:6px}.status-dot.live{background:var(--green)}.status-dot.err{background:var(--red)}
 main{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;padding:16px;max-width:1500px;margin:0 auto}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}.card h2,.section-box h3{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0;padding:12px 14px;border-bottom:1px solid var(--line)}.card .body{padding:14px}.section-box{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fbfdff}.section-box .body{padding:12px}.sessions button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:#fff;color:inherit;padding:11px 13px;cursor:pointer}.sessions button:hover,.sessions button.active{background:#eef6ff}.sessions button:focus-visible,.tabs button:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}.runid,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.runid{font-size:12px;color:#1e3a8a}.task{font-weight:650;margin-top:4px}.meta,.small{font-size:12px;color:var(--muted)}.meta{margin-top:5px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.metric{padding:12px;border:1px solid var(--line);border-radius:6px;background:#fbfdff}.metric b{display:block;font-size:22px}.metric span{color:var(--muted);font-size:12px}.pill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:650;border:1px solid var(--line);background:#f8fafc}.ok{color:var(--green);background:#f0fdf4}.warn{color:var(--amber);background:#fffbeb}.bad{color:var(--red);background:#fef2f2}.info{color:var(--blue);background:#eff6ff}.phase{padding:11px;border:1px solid var(--line);border-radius:6px;margin-bottom:10px;background:#fbfdff}.phase strong{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.worker{padding:11px;border-left:4px solid var(--blue);background:#f8fafc;border-radius:6px;margin:10px 0}.bar{height:8px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px}.bar>i{display:block;height:100%;background:var(--blue);border-radius:999px}.event{display:grid;grid-template-columns:170px 190px 150px 1fr;gap:10px;border-bottom:1px solid var(--line);padding:8px 0;font-size:13px;align-items:start}pre{white-space:pre-wrap;background:#111827;color:#e5e7eb;border-radius:6px;padding:12px;overflow:auto}.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.tabs button{border:1px solid var(--line);border-radius:999px;padding:7px 10px;background:#fff;color:var(--ink);cursor:pointer}.tabs button.active{background:#eff6ff;color:var(--blue);border-color:#bfdbfe}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:1050px){main{grid-template-columns:1fr}.grid,.two{grid-template-columns:1fr}.event{grid-template-columns:1fr}.sessions{max-height:42vh;overflow:auto}}
+.source-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px}.pathline{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 """
 
 TABS = ["overview", "dag", "workers", "events", "verification", "memory", "usage", "codex", "gates", "stats"]
@@ -51,6 +64,14 @@ def status_class(status: Any) -> str:
     if s in {"waiting", "running", "pending"}:
         return "warn"
     return "info"
+
+
+def source_label(row: dict[str, Any] | None) -> str:
+    row = row or {}
+    raw = row.get("source_type") or row.get("source") or "aoc"
+    if isinstance(raw, dict):
+        return str(raw.get("type") or "aoc")
+    return str(raw)
 
 
 def progress_for_agent(agent: dict[str, Any]) -> int:
@@ -77,6 +98,18 @@ def select_run(root: Path, explicit: str | None) -> str | None:
 def usage_summary(root: Path, run_id: str | None) -> dict[str, Any]:
     if not run_id:
         return {"totals": {}, "rows": []}
+    state = load_state(root, run_id)
+    if state and is_discovered_codex_state(state):
+        usage = state.get("usage") if isinstance(state.get("usage"), dict) else {}
+        return {
+            "totals": {
+                "total_tokens": usage.get("total_tokens", 0),
+                "estimated_tokens": usage.get("total_tokens", 0),
+                "cost_usd": 0.0,
+                "records": 1 if usage else 0,
+            },
+            "rows": [{"key": "codex_session", **usage}] if usage else [],
+        }
     try:
         records = load_records(root, run_id)
         records.append(derive_from_run(root, run_id))
@@ -88,24 +121,43 @@ def usage_summary(root: Path, run_id: str | None) -> dict[str, Any]:
 def collect(root: Path, run_id: str | None = None, with_codex: bool = False, codex_url: str | None = None) -> dict[str, Any]:
     root = root.resolve()
     sessions = load_sessions(root)
-    selected = select_run(root, run_id) or (sessions[0].get("run_id") if sessions else None)
+    selected = run_id if run_id and run_id != "latest" else (sessions[0].get("run_id") if sessions else select_run(root, run_id))
     state = load_state(root, selected)
     plan = load_plan(root, selected)
     events = load_events(root, selected, 160)
     controls = load_controls(root, selected)
     memory = load_memory(root, selected)
+    is_discovered_codex = bool(state and is_discovered_codex_state(state))
     try:
-        stats = run_stats(root, selected) if selected else {}
+        if selected and state and not is_discovered_codex:
+            stats = run_stats(root, selected)
+        else:
+            stats = {"status": state.get("status"), "event_count": len(events), "worker_count": 0}
     except Exception as exc:
         stats = {"error": str(exc)}
     usage = usage_summary(root, selected)
     codex = {}
-    if with_codex and selected:
+    if with_codex and selected and state and not is_discovered_codex:
         try:
             codex = codex_snapshot(root, selected, codex_url)
         except Exception as exc:
             codex = {"error": str(exc)}
-    return {"repo": str(root), "selected_run": selected, "sessions": sessions, "state": state, "plan": plan, "events": events, "controls": controls, "memory": memory, "stats": stats, "usage": usage, "codex": codex, "codex_enabled": with_codex}
+    discovery = {"codex_homes": [str(p) for p in codex_homes()], "commands": import_commands()}
+    return {"repo": str(root), "selected_run": selected, "sessions": sessions, "state": state, "plan": plan, "events": events, "controls": controls, "memory": memory, "stats": stats, "usage": usage, "codex": codex, "codex_enabled": with_codex, "discovery": discovery}
+
+
+def import_commands() -> list[str]:
+    return [
+        "aoc import",
+        'aoc init "Fix checkout flow"',
+        "aoc sessions",
+    ]
+
+
+def empty_state_html() -> str:
+    homes = ", ".join(esc(p) for p in codex_homes())
+    commands = "".join(f"<li><span class=\"mono\">{esc(cmd)}</span></li>" for cmd in import_commands())
+    return f'<div class="body small"><p>No AOC runs or Codex sessions were found.</p><p>Next steps:</p><ul>{commands}</ul><p>Codex home troubleshooting: checked {homes}. Set <span class="mono">AOC_CODEX_HOME</span> or <span class="mono">CODEX_HOME</span> if your Codex data lives elsewhere.</p></div>'
 
 
 def render_fragment(data: dict[str, Any], tab: str = "overview") -> tuple[str, str, str, str]:
@@ -122,19 +174,23 @@ def render_fragment(data: dict[str, Any], tab: str = "overview") -> tuple[str, s
         for s in sessions:
             rid = s.get("run_id")
             active = " active" if rid == selected else ""
-            sidebar.append(f'<button class="{active}" data-run="{esc(rid)}"><div class="runid">{esc(rid)}</div><div class="task">{esc(s.get("task") or "Untitled run")}</div><div class="meta">{esc(s.get("status") or "unknown")} | workers {esc(s.get("worker_count",0))} | tests {esc(s.get("test_event_count",0))}</div></button>')
+            badge = source_badge(s)
+            path = session_path(s)
+            sidebar.append(f'<button class="{active}" data-run="{esc(rid)}"><div class="source-row"><span class="pill info">{esc(badge)}</span><span class="runid">{esc(rid)}</span></div><div class="task">{esc(s.get("task") or "Untitled run")}</div><div class="meta">{esc(s.get("status") or "unknown")} | workers {esc(s.get("worker_count",0))} | tests {esc(s.get("test_event_count",0))} | last {esc(s.get("last_event") or "")}</div><div class="meta pathline">{esc(path)}</div></button>')
     else:
-        sidebar.append('<div class="body small">No orchestration sessions yet. Invoke <span class="mono">$agent-orchestration-skill</span> and initialize a run ledger.</div>')
+        sidebar.append(empty_state_html())
 
     overview = f'''
       <div class="grid">
+        <div class="metric"><b>{esc(source_badge(state))}</b><span>Source</span></div>
         <div class="metric"><b>{esc(state.get('status','unknown'))}</b><span>Status</span></div>
         <div class="metric"><b>{esc(stats.get('worker_count',0))}</b><span>Workers</span></div>
         <div class="metric"><b>{esc(stats.get('event_count',0))}</b><span>Events</span></div>
-        <div class="metric"><b>{esc(stats.get('dispatch_count',0))}</b><span>Dispatches</span></div>
+        <div class="metric"><b>{esc(state.get('codex_session_id') or state.get('mode') or '-')}</b><span>Session / mode</span></div>
         <div class="metric"><b>{esc(stats.get('handoff_count',0))}</b><span>Handoffs</span></div>
         <div class="metric"><b>{esc(totals.get('estimated_tokens', stats.get('token_pressure_estimate',0)))}</b><span>Estimated pressure tokens</span></div>
       </div>
+      <div class="section-box" style="margin-top:14px"><h3>Session Source</h3><div class="body small"><div>type: <span class="mono">{esc(source_label(state))}</span></div><div>path: <span class="mono">{esc(state.get('codex_session_path') or state.get('state_path') or '')}</span></div><div>imported: <span class="mono">{esc(state.get('imported_at') or '')}</span></div></div></div>
       <div class="two" style="margin-top:14px">
         <div class="section-box"><h3>Classification</h3><div class="body"><pre>{esc(json.dumps(state.get('classification') or {}, indent=2, ensure_ascii=False))}</pre></div></div>
         <div class="section-box"><h3>Last Event</h3><div class="body"><pre>{esc(json.dumps(state.get('last_event') or {}, indent=2, ensure_ascii=False))}</pre></div></div>
@@ -202,13 +258,17 @@ let source = null;
 const token = new URLSearchParams(location.search).get("token") || "";
 function esc(v){return String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
 function statusClass(v){const s=String(v||"").toLowerCase(); if(["pass","passed","ok","success","completed","done","finished"].includes(s)) return "ok"; if(["fail","failed","blocked","rejected","error"].includes(s)) return "bad"; if(["waiting","running","pending"].includes(s)) return "warn"; return "info";}
+function sourceType(s){const raw=(s&&s.source_type)||(s&&s.source)||""; return String(raw&&typeof raw==="object"?(raw.type||""):raw);}
+function sourceBadge(s){const src=sourceType(s).toLowerCase(); const rid=String((s&&s.run_id)||""); if(rid.startsWith("codex:")||src.includes("codex_session")||src==="codex"||src==="codex_cli") return "CODEX"; if(src.includes("app_server")||src.includes("appserver")) return "APP_SERVER"; return "AOC";}
+function sessionPath(s){return String((s&&s.codex_session_path)||(s&&s.session_path)||(s&&s.path)||"");}
 function progress(a){const names=(a.events||[]).map(e=>e.event||""); const checks=[["worker_dispatched",10],["worker_started",20],["context_coverage_passed",35],["inspection_complete",50],["patch_applied",65],["command_started",75],["command_finished",85],["handoff_received",95],["handoff_validated",100]]; let v=0; for(const [n,s] of checks){if(names.includes(n)) v=Math.max(v,s);} const st=String(a.status||"").toLowerCase(); if(["passed","completed","success","ok"].includes(st)) return 100; if(["failed","blocked","rejected"].includes(st)) return Math.max(v,40); return v;}
 function metric(v,l){return `<div class="metric"><b>${esc(v)}</b><span>${esc(l)}</span></div>`;}
 function pre(v){return `<pre>${esc(JSON.stringify(v || {}, null, 2))}</pre>`;}
-function renderSessions(){const box=document.getElementById("sessions"); const sessions=data.sessions||[]; if(!sessions.length){box.innerHTML='<div class="body small">No orchestration sessions yet.</div>'; return;} box.innerHTML=sessions.map(s=>`<button class="${s.run_id===data.selected_run?'active':''}" data-run="${esc(s.run_id)}"><div class="runid">${esc(s.run_id)}</div><div class="task">${esc(s.task||"Untitled run")}</div><div class="meta">${esc(s.status||"unknown")} | workers ${esc(s.worker_count||0)} | tests ${esc(s.test_event_count||0)}</div></button>`).join(""); box.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>selectRun(b.dataset.run)));}
+function emptyState(){const commands=(data.discovery&&data.discovery.commands)||["aoc import","aoc init \"Fix checkout flow\"","aoc sessions"]; const homes=((data.discovery&&data.discovery.codex_homes)||[]).join(", "); return `<div class="body small"><p>No AOC runs or Codex sessions were found.</p><p>Next steps:</p><ul>${commands.map(c=>`<li><span class="mono">${esc(c)}</span></li>`).join("")}</ul><p>Codex home troubleshooting: checked ${esc(homes)}. Set <span class="mono">AOC_CODEX_HOME</span> or <span class="mono">CODEX_HOME</span> if needed.</p></div>`;}
+function renderSessions(){const box=document.getElementById("sessions"); const sessions=data.sessions||[]; if(!sessions.length){box.innerHTML=emptyState(); return;} box.innerHTML=sessions.map(s=>`<button class="${s.run_id===data.selected_run?'active':''}" data-run="${esc(s.run_id)}"><div class="source-row"><span class="pill info">${esc(sourceBadge(s))}</span><span class="runid">${esc(s.run_id)}</span></div><div class="task">${esc(s.task||"Untitled run")}</div><div class="meta">${esc(s.status||"unknown")} | workers ${esc(s.worker_count||0)} | tests ${esc(s.test_event_count||0)} | last ${esc(s.last_event||"")}</div><div class="meta pathline">${esc(sessionPath(s))}</div></button>`).join(""); box.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>selectRun(b.dataset.run)));}
 function renderTabs(){const box=document.getElementById("tabs"); box.innerHTML=__TABS__.map(t=>`<button class="${t===currentTab?'active':''}" data-tab="${t}">${esc(t[0].toUpperCase()+t.slice(1))}</button>`).join(""); box.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{currentTab=b.dataset.tab; history.replaceState(null,"",urlFor(false)); render();}));}
 function renderContent(){const state=data.state||{}, stats=data.stats||{}, usage=data.usage||{}, totals=usage.totals||{}; const events=data.events||[]; const controls=data.controls||[]; const plan=data.plan||{}; const agents=(state.agents&&typeof state.agents==="object")?state.agents:{}; let html="";
- if(currentTab==="overview"){html=`<div class="grid">${metric(state.status||"unknown","Status")}${metric(stats.worker_count||0,"Workers")}${metric(stats.event_count||0,"Events")}${metric(stats.dispatch_count||0,"Dispatches")}${metric(stats.handoff_count||0,"Handoffs")}${metric(totals.estimated_tokens ?? stats.token_pressure_estimate ?? 0,"Estimated pressure tokens")}</div><div class="two" style="margin-top:10px"><div class="section-box"><h3>Classification</h3><div class="body">${pre(state.classification||{})}</div></div><div class="section-box"><h3>Last Event</h3><div class="body">${pre(state.last_event||{})}</div></div></div>`;}
+ if(currentTab==="overview"){html=`<div class="grid">${metric(sourceBadge(state),"Source")}${metric(state.status||"unknown","Status")}${metric(stats.worker_count||0,"Workers")}${metric(stats.event_count||0,"Events")}${metric(state.codex_session_id||state.mode||"-","Session / mode")}${metric(totals.estimated_tokens ?? stats.token_pressure_estimate ?? 0,"Estimated pressure tokens")}</div><div class="section-box" style="margin-top:10px"><h3>Session Source</h3><div class="body small"><div>type: <span class="mono">${esc(sourceType(state)||"aoc")}</span></div><div>path: <span class="mono">${esc(state.codex_session_path||state.state_path||"")}</span></div><div>imported: <span class="mono">${esc(state.imported_at||"")}</span></div></div></div><div class="two" style="margin-top:10px"><div class="section-box"><h3>Classification</h3><div class="body">${pre(state.classification||{})}</div></div><div class="section-box"><h3>Last Event</h3><div class="body">${pre(state.last_event||{})}</div></div></div>`;}
  else if(currentTab==="dag"){const phases=plan.phases||[]; html=phases.length?phases.map(p=>`<div class="phase"><strong>${esc(p.id)}</strong> <span class="pill info">${esc(p.kind)}</span> <span class="pill">${esc(p.agent)}</span> <span class="pill">${esc(p.reasoning)}</span><p>${esc(p.objective)}</p><div class="small">depends on: ${esc((p.depends_on||[]).join(", ")||"root")}</div></div>`).join(""):'<p class="small">No DAG plan found.</p>';}
  else if(currentTab==="workers"){const names=Object.keys(agents).sort(); html=names.length?names.map(n=>{const a=agents[n]||{}; return `<div class="worker"><strong>${esc(n)}</strong> <span class="pill ${statusClass(a.status)}">${esc(a.status||"unknown")}</span> <span class="pill">${esc(a.reasoning||"")}</span><div class="bar"><i style="width:${progress(a)}%"></i></div><div class="small">scope: ${esc((a.scope||[]).join(", "))}</div><div class="small">files: ${esc((a.files||[]).slice(0,8).join(", "))}</div></div>`}).join(""):'<p class="small">No worker activity recorded.</p>';}
  else if(currentTab==="events"){html=events.slice(-100).map(e=>`<div class="event"><span class="mono">${esc(e.ts)}</span><span>${esc(e.event)}</span><span>${esc(e.agent)}</span><span>${esc(e.summary)}</span></div>`).join("")||'<p class="small">No events yet.</p>';}
@@ -216,7 +276,7 @@ function renderContent(){const state=data.state||{}, stats=data.stats||{}, usage
  else if(currentTab==="memory"){html=`<pre>${esc((data.memory||[]).join("\n"))}</pre>`;}
  else if(currentTab==="usage"){const rows=usage.rows||[]; html=`<div class="grid">${metric(totals.total_tokens||0,"Real/imported tokens")}${metric(totals.estimated_tokens||0,"Estimated pressure")}${metric("$"+Number(totals.cost_usd||0).toFixed(4),"Cost")}</div>`+rows.map(r=>`<div class="event"><span>${esc(r.key)}</span><span>real ${esc(r.total_tokens||0)}</span><span>est ${esc(r.estimated_tokens||0)}</span><span>$${Number(r.cost_usd||0).toFixed(4)}</span></div>`).join("");}
  else if(currentTab==="gates"){html=controls.length?controls.map(g=>`<div class="phase"><strong>${esc(g.gate_id)}</strong> <span class="pill ${statusClass(g.status)}">${esc(g.status)}</span><p>${esc(g.reason)}</p><div class="small">options: ${esc((g.options||[]).join("; "))}</div></div>`).join(""):'<p class="small">No STOP gates recorded.</p>';}
- else if(currentTab==="codex"){html=data.codex_enabled?pre(data.codex||{}):'<p class="small">Codex app-server/codexui bridge is disabled for this GUI session.</p><pre>aoc gui --with-codex --codex-url http://127.0.0.1:&lt;port&gt;</pre>';}
+ else if(currentTab==="codex"){const discovery=data.discovery||{}; html=`<div class="section-box"><h3>Discovery / Import</h3><div class="body"><pre>${esc(JSON.stringify(discovery,null,2))}</pre></div></div>`+(data.codex_enabled?pre(data.codex||{}):'<p class="small">Codex app-server/codexui bridge is disabled for this GUI session.</p><pre>aoc gui --with-codex --codex-url http://127.0.0.1:&lt;port&gt;</pre>');}
  else {html=pre(stats);}
  document.getElementById("content").innerHTML=html;}
 function render(){document.getElementById("repoLine").innerHTML=`<span id="liveDot" class="status-dot live"></span>${esc(data.repo)} | <span class="mono">${esc(data.selected_run||"no-run")}</span>`; document.getElementById("panelTitle").textContent=(data.state&&data.state.task)||"No selected orchestration run"; renderSessions(); renderTabs(); renderContent();}
@@ -302,6 +362,23 @@ class Handler(BaseHTTPRequestHandler):
         tab = (qs.get("tab") or ["overview"])[0]
         if parsed.path == "/events":
             self.stream(run_id)
+            return
+        if parsed.path == "/api/discovery":
+            payload = {
+                "codex_homes": [str(p) for p in codex_homes()],
+                "sessions": discover_codex_sessions(root=self.root),
+                "commands": import_commands(),
+            }
+            self.send(json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            return
+        if parsed.path == "/api/import-help":
+            payload = {
+                "safe": True,
+                "side_effects": "none",
+                "commands": import_commands(),
+                "note": "This endpoint only exposes local import guidance. Run imports from the CLI so file trust and run ownership stay explicit.",
+            }
+            self.send(json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
         data = collect(self.root, run_id, self.with_codex, self.codex_url)
         if parsed.path.startswith("/api"):

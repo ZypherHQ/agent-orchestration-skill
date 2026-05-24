@@ -13,10 +13,16 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 from event_emit import emit_event, latest_run_id, read_json, run_dir, utc_now, write_json_atomic  # noqa: E402
 
+MAX_SEARCH_FILE_BYTES = 1_000_000
+
 
 def text_excerpt(text: str, n: int = 220) -> str:
     compact = " ".join(text.split())
     return compact if len(compact) <= n else compact[: n - 1] + "…"
+
+
+def rel_path(path: Path, root: Path) -> str:
+    return str(path.relative_to(root)) if path.is_relative_to(root) else str(path)
 
 
 def add_doc(docs: list[dict[str, Any]], path: Path, root: Path, kind: str, run_id: str | None = None) -> None:
@@ -26,9 +32,8 @@ def add_doc(docs: list[dict[str, Any]], path: Path, root: Path, kind: str, run_i
         text = path.read_text(encoding="utf-8", errors="replace")
     except Exception:
         return
-    rel = str(path.relative_to(root)) if path.is_relative_to(root) else str(path)
     docs.append({
-        "path": rel,
+        "path": rel_path(path, root),
         "kind": kind,
         "run_id": run_id or "",
         "chars": len(text),
@@ -45,20 +50,51 @@ def capsule_docs(path: Path, root: Path, docs: list[dict[str, Any]], run_id: str
     except Exception:
         add_doc(docs, path, root, "context_capsule_raw", run_id)
         return
-    rel = str(path.relative_to(root)) if path.is_relative_to(root) else str(path)
     pieces = []
     for key in ["must_read", "forbidden", "confirmed_facts", "rejected_assumptions", "decisions", "acceptance_criteria", "validation_commands", "blockers", "evidence_refs"]:
         values = capsule.get(key) or []
         if values:
             pieces.append(f"{key}: " + "; ".join(str(v.get('path') or v.get('value') or v) if isinstance(v, dict) else str(v) for v in values[:8]))
     docs.append({
-        "path": rel,
+        "path": rel_path(path, root),
         "kind": "context_capsule",
         "run_id": run_id or capsule.get("run_id", ""),
         "chars": path.stat().st_size,
         "updated_at": capsule.get("updated_at", utc_now()),
         "excerpt": text_excerpt(" | ".join(pieces) or capsule.get("task", "")),
     })
+
+
+def native_run_docs(root: Path, run_id: str | None = None) -> list[dict[str, Any]]:
+    docs: list[dict[str, Any]] = []
+    if run_id:
+        run_dirs = [run_dir(root, run_id)]
+    else:
+        run_dirs = [sp.parent for sp in sorted((root / ".orchestration" / "runs").glob("*/state.json"))]
+    for rd in run_dirs:
+        rid = rd.name
+        add_doc(docs, rd / "state.json", root, "aoc_state", rid)
+        add_doc(docs, rd / "events.jsonl", root, "aoc_events", rid)
+    return docs
+
+
+def doc_key(doc: dict[str, Any]) -> tuple[str, str, str]:
+    return (str(doc.get("path", "")), str(doc.get("kind", "")), str(doc.get("run_id", "")))
+
+
+def doc_file_text(root: Path, doc: dict[str, Any]) -> str:
+    raw = str(doc.get("path") or "")
+    if not raw:
+        return ""
+    path = Path(raw)
+    if not path.is_absolute():
+        path = root / path
+    try:
+        if not path.is_file() or path.stat().st_size > MAX_SEARCH_FILE_BYTES:
+            return ""
+        return path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
 
 
 def build_index(root: Path, run_id: str | None = None) -> dict[str, Any]:
@@ -79,6 +115,8 @@ def build_index(root: Path, run_id: str | None = None) -> dict[str, Any]:
             run_ids.append(sp.parent.name)
     for rid in run_ids:
         rd = run_dir(root, rid)
+        add_doc(docs, rd / "state.json", root, "aoc_state", rid)
+        add_doc(docs, rd / "events.jsonl", root, "aoc_events", rid)
         capsule_docs(rd / "context_capsule.json", root, docs, rid)
         for sub, kind in [("handoffs", "handoff"), ("dispatches", "dispatch"), ("evidence", "evidence"), ("logs", "log")]:
             for p in sorted((rd / sub).glob("**/*")):
@@ -97,9 +135,20 @@ def search_index(root: Path, query: str, limit: int = 10) -> list[dict[str, Any]
     if not isinstance(idx, dict) or not idx.get("docs"):
         idx = build_index(root)
     terms = [t.lower() for t in re.findall(r"[a-zA-Z0-9_./-]{2,}", query)]
-    rows = []
+    docs_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
     for doc in idx.get("docs", []):
-        blob = " ".join(str(doc.get(k, "")) for k in ["path", "kind", "run_id", "excerpt"]).lower()
+        if isinstance(doc, dict):
+            docs_by_key[doc_key(doc)] = doc
+    for doc in native_run_docs(root):
+        docs_by_key[doc_key(doc)] = doc
+    rows = []
+    for doc in docs_by_key.values():
+        blob = " ".join(
+            [
+                " ".join(str(doc.get(k, "")) for k in ["path", "kind", "run_id", "excerpt"]),
+                doc_file_text(root, doc),
+            ]
+        ).lower()
         score = sum(1 for t in terms if t in blob)
         if score or not terms:
             d = dict(doc)

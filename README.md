@@ -4,67 +4,70 @@
   <img src="workflow-diagram.png" alt="Agentic Orchestration Control workflow" width="100%" />
 </p>
 
-<p align="center">
-  <em>Explicit-only, npm/npx control room for Codex orchestration runs.</em>
-</p>
+Agentic Orchestration Control is an explicit-only npm/npx control room for Codex orchestration. It installs a Codex skill, leaf-worker profiles, local run ledgers, usage reports, Codex session import, and TUI/GUI views into a repository without using hidden `.skills`, `.agents`, or `.codex` package layouts.
 
-<p align="center">
-  <a href="https://github.com/ZypherHQ/agent-orchestration-skill">
-    <img src="https://img.shields.io/badge/GitHub-ZypherHQ%2Fagent--orchestration--skill-111827?style=for-the-badge&labelColor=0f172a" alt="GitHub repository" />
-  </a>
-  <a href="LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge&labelColor=0f172a" alt="MIT License" />
-  </a>
-</p>
+## Start In 10 Seconds
 
-Agentic Orchestration Control packages an explicit Codex orchestration skill, leaf-worker subagent profiles, run ledgers, usage reports, and realtime TUI/GUI views behind one npm CLI. State is written to `.orchestration/`; the TUI and GUI read the run ledger as it changes.
-
-## Quick Start
-
-Install the skill pack into a target repo:
+Install into the repository you are working in:
 
 ```bash
-npx --yes agentic-orchestration-control install /path/to/repo
+npx --yes agentic-orchestration-control install .
 ```
 
-Start a run ledger in that repo:
+Open the control room:
 
 ```bash
-npx --yes agentic-orchestration-control init \
-  --repo /path/to/repo \
-  --run-id latest \
-  --task "ship checkout fix"
+aoc
+aoc gui
 ```
 
-Open the realtime terminal UI:
+Start an observable run:
 
 ```bash
-npx --yes agentic-orchestration-control --repo /path/to/repo --run-id latest
+aoc init "Fix checkout flow"
 ```
 
-Open the realtime local GUI:
-
-```bash
-npx --yes agentic-orchestration-control gui --repo /path/to/repo --run-id latest
-```
-
-Use the explicit skill only when you want the orchestration workflow:
+Use the skill only when you want the orchestration workflow:
 
 ```text
 Use $agent-orchestration-skill for this task.
-
-Run in token-efficient control-plane mode.
-Spawn only useful leaf workers.
-Preserve context with a scoped Context Capsule.
 ```
 
 Prompts without the exact literal `$agent-orchestration-skill` should run in normal Codex mode.
 
-> Note: You need `npm` to fetch/run the CLI. The routed control-room utilities also call bundled Python scripts, so `python3` must be on `PATH` for TUI, GUI, usage, gates, memory, and validation commands.
+## Short Commands
 
-## Installed Layout
+```bash
+aoc
+aoc gui
+aoc init "Fix checkout flow"
+aoc sessions
+aoc import
+aoc current
+aoc use <run_id>
+aoc search "checkout"
+aoc usage
+aoc budget 12000
+aoc doctor
+```
 
-`install` writes the supported layout into the target repo:
+`aoc` resolves the repo from `--repo`, `AOC_REPO`, the nearest git root, or the current directory when it looks like a project. It resolves the run from `--run-id`, `AOC_RUN_ID`, `.orchestration/current-run`, `.orchestration/current.json`, or the latest `.orchestration/runs/*` state, including imported Codex sessions.
+
+## Before A Run Exists
+
+`aoc` and `aoc gui` should open even before `aoc init`. In an empty repo they show an empty state and any discoverable Codex sessions. Use `aoc import` to import local Codex rollout logs into `.orchestration/runs/` without creating a native AOC run first.
+
+## AOC Runs vs Codex Sessions
+
+An AOC run is a local orchestration ledger created by `aoc init "task"`. It stores state, events, dispatches, handoffs, evidence, gates, memory, and usage under `.orchestration/runs/<run_id>/`.
+
+An imported Codex session comes from local Codex rollout JSONL files under `AOC_CODEX_HOME`, `CODEX_HOME`, `~/.codex`, or another configured Codex home. Imported sessions are normalized into `.orchestration/runs/codex-*/` with source metadata so the TUI, GUI, sessions list, usage, and search commands can display them beside native AOC runs.
+
+## How The Skill Works
+
+The installed `AGENTS.md` keeps the skill explicit-only. The root Codex thread remains the orchestrator, and spawned workers are leaf-only. The package provides subagent profiles and validators, but it does not make model calls by itself.
+
+Installed layout:
 
 ```text
 skills/agent-orchestration-skill/
@@ -73,101 +76,104 @@ subagents/
 AGENTS.md
 ```
 
-Legacy hidden layouts such as `.skills/`, `.agents/skills/agent-orchestration-skill`, and `.codex/agents` are backed up under `.orchestration-backup-*` when they contain payload.
+## TUI And GUI
 
-## Common Commands
-
-Run commands with `npx`, or use the `aoc` alias after local/global installation:
+Use the terminal control room for quick status:
 
 ```bash
-npx --yes agentic-orchestration-control install /path/to/repo
-npx --yes agentic-orchestration-control init --repo /path/to/repo --run-id latest --task "smoke"
-npx --yes agentic-orchestration-control --repo /path/to/repo --run-id latest
-npx --yes agentic-orchestration-control gui --repo /path/to/repo --run-id latest
-npx --yes agentic-orchestration-control usage --repo /path/to/repo --run-id latest
-npx --yes agentic-orchestration-control budget 12000 --repo /path/to/repo --run-id latest
-npx --yes agentic-orchestration-control gates --repo /path/to/repo
-npx --yes agentic-orchestration-control memory build --repo /path/to/repo --run-id latest
-aoc --repo /path/to/repo --run-id latest
-aoc gui --repo /path/to/repo --run-id latest
+aoc
+aoc sessions
+aoc current
 ```
 
-## Snapshot Modes
-
-Use snapshots in CI, tests, logs, or non-interactive shells.
-
-Print a deterministic TUI snapshot:
+Use the local web GUI for a browser view:
 
 ```bash
-npx --yes agentic-orchestration-control snapshot --repo /path/to/repo --run-id latest
+aoc gui
+aoc gui --once
 ```
 
-Render one HTML GUI snapshot and exit:
+The GUI binds to localhost by default. Remote binding requires explicit opt-in and auth:
 
 ```bash
-npx --yes agentic-orchestration-control gui \
-  --repo /path/to/repo \
-  --run-id latest \
-  --once > /tmp/aoc.html
+AOC_GUI_TOKEN="change-me" aoc gui --host 0.0.0.0 --allow-remote --auth-token "$AOC_GUI_TOKEN"
 ```
 
-## Remote GUI Access
+## Usage And Budget
 
-The GUI binds locally by default. Expose it remotely only with an explicit token:
+Usage reports separate imported or recorded real token data from local estimated orchestration pressure:
 
 ```bash
-AOC_GUI_TOKEN="change-me" \
-  npx --yes agentic-orchestration-control gui \
-  --repo /path/to/repo \
-  --run-id latest \
-  --host 0.0.0.0 \
-  --allow-remote \
-  --auth-token "$AOC_GUI_TOKEN"
+aoc usage
+aoc budget 12000
 ```
 
-## Runtime State
+Estimated pressure is not provider billing. Treat it as a local signal for prompt size, fan-out, and validation cost.
 
-Runs write local state under the target repo:
+## Codex Session Import
 
-```text
-.orchestration/runs/<run_id>/
-.orchestration/events.jsonl
-.orchestration/usage/
-.orchestration/memory/
+Import local Codex sessions:
+
+```bash
+aoc import
 ```
 
-The TUI and GUI read this state. They do not need mock data or a remote service.
+Use a fake or alternate Codex home when testing:
 
-## What Is Enforced
+```bash
+AOC_CODEX_HOME=/tmp/fake-codex aoc import --json
+```
 
-The package includes real validators and command-level checks for install layout, publish readiness, TUI/GUI snapshots, run ledgers, usage budgets, STOP gate state, context coverage, and handoff shape.
+List and inspect imported sessions:
 
-Some orchestration boundaries are policy-driven because Codex prompts and spawned workers are outside the package runtime. The skill, installed `AGENTS.md`, subagent profiles, validators, and docs all require explicit activation, root-only orchestration, scoped worker dispatches, and leaf-worker behavior, but they cannot make an arbitrary model session obey those rules without the user and agent following the contract.
+```bash
+aoc sessions
+aoc use <run_id>
+aoc search "checkout"
+```
 
-Usage reporting also separates imported/recorded real usage from estimated orchestration pressure. Estimated pressure is a local signal, not provider billing.
+## Safety Model
 
-## Development
+- The skill activates only on the exact literal `$agent-orchestration-skill`.
+- Runtime state stays in `.orchestration/`.
+- Hidden `.skills`, `.agents`, and `.codex` package payloads are rejected.
+- The GUI is localhost-only unless `--allow-remote` and an auth token are provided.
+- Imported Codex sessions are local files; review `.orchestration/` before sharing or committing it.
 
-Install dependencies and run checks:
+## Troubleshooting
+
+If `aoc` is not on `PATH`, use the installed repo shim:
+
+```bash
+./.orchestration/bin/aoc
+```
+
+If no sessions appear, run:
+
+```bash
+aoc import --json
+aoc sessions --json
+```
+
+If the wrong repo or run is selected, be explicit:
+
+```bash
+aoc --repo .
+aoc use <run_id>
+```
+
+## Development And Publishing
 
 ```bash
 npm install
 npm test
 npm run test:npm-cli
 npm run publish:check
+npm pack --dry-run
 npm run validate:production
 ```
 
-Dry-run the package payload, then publish when validation passes:
-
-```bash
-npm pack --dry-run
-npm publish
-```
-
-## More Docs
-
-Start with [docs/README.md](docs/README.md) for setup, usage examples, repo map, quality notes, security model, and contributor-sized PR candidates.
+More detail lives in [docs/README.md](docs/README.md) and the command reference in [docs/COMMANDS.md](docs/COMMANDS.md).
 
 ## License
 

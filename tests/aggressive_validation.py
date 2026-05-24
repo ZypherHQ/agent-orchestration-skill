@@ -122,6 +122,15 @@ def validate_static() -> None:
     py_files = sorted(SCRIPTS.glob("*.py"))
     if len(py_files) < 25:
         fail(f"expected at least 25 production Python scripts, found {len(py_files)}")
+    required_session_scripts = [
+        "codex_session_discovery.py",
+        "codex_session_importer.py",
+        "codex_session_watch.py",
+        "codex_session_normalize.py",
+    ]
+    for script in required_session_scripts:
+        if not (SCRIPTS / script).exists():
+            fail(f"missing Codex session ingestion script: {script}")
     for path in py_files:
         tmpdir = Path(tempfile.mkdtemp())
         try:
@@ -161,16 +170,45 @@ def validate_static() -> None:
     ok("validated executable permissions")
 
     pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    command_contract_path = ROOT / "tools" / "aoc.commands.json"
+    if not command_contract_path.exists():
+        fail("missing tools/aoc.commands.json command contract")
+    command_contract = json.loads(command_contract_path.read_text(encoding="utf-8"))
+    commands = command_contract.get("commands")
+    if not isinstance(commands, list) or not commands:
+        fail("command contract missing non-empty commands list")
+    installed_shim_commands = command_contract.get("installedShimCommands")
+    if not isinstance(installed_shim_commands, list) or not installed_shim_commands:
+        installed_shim_commands = [c.get("name") for c in commands if isinstance(c, dict) and c.get("installedShim") is not False]
+    codex_session_shim_commands = command_contract.get("codexSessionShimCommands")
+    if not isinstance(codex_session_shim_commands, list) or not codex_session_shim_commands:
+        codex_session_shim_commands = ["sessions", "current", "use", "import", "watch", "search"]
+    for required in ["sessions", "current", "use", "import", "watch", "search"]:
+        if required not in installed_shim_commands:
+            fail(f"command contract missing installed shim command: {required}")
+        if required not in codex_session_shim_commands:
+            fail(f"command contract missing Codex session shim command: {required}")
+    ok("validated command contract asset")
+
     files = set(pkg.get("files", []))
     for required in ["bin/", "tools/", "skills/", "subagents/", "docs/", "tests/", "install.sh", "README.md", "LICENSE"]:
         if required not in files:
             fail(f"package.json files allowlist missing {required}")
     if ".skills/" in files or ".agents/" in files or ".codex/" in files:
         fail("package.json must not include hidden legacy layouts")
+    bins = pkg.get("bin", {})
+    for required_bin in ["agentic-orchestration-control", "agent-orchestration-control", "aoc", "aoc-gui", "aoc-usage"]:
+        if bins.get(required_bin) != "./bin/aoc.mjs":
+            fail(f"package.json bin mapping missing or inconsistent: {required_bin}")
     for script in ["test", "publish:check", "validate:production", "prepublishOnly", "fix:permissions"]:
         if script not in pkg.get("scripts", {}):
             fail(f"package.json missing script: {script}")
-    ok("validated npm metadata and allowlist")
+    manifest = json.loads((ROOT / "SKILL_PACK_MANIFEST.json").read_text(encoding="utf-8"))
+    guards = " ".join(manifest.get("production_guards", []))
+    for phrase in ["short command contract", "Codex session import"]:
+        if phrase.lower() not in guards.lower():
+            fail(f"manifest production guards missing phrase: {phrase}")
+    ok("validated npm metadata, allowlist, and command assets")
 
     stale = [p for p in ROOT.rglob("__pycache__") if "node_modules" not in str(p)] + list(ROOT.rglob("*.pyc"))
     if stale:

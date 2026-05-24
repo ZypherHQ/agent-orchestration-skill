@@ -1,14 +1,76 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_ROOT="$(cd "$SKILL_DIR/../.." && pwd)"
+DEFAULT_ROOT="$(cd "$SKILL_DIR/../.." && pwd)"
+ROOT=""
 SCRIPTS="$SKILL_DIR/scripts"
+CMD=""
+RUN_ID=""
+SELECTED_RUN_ID=""
+RUN_SOURCE="none"
+JSON=0
+QUIET=0
+VERBOSE=0
+NO_OPEN=0
+REST=()
 
 need_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "Missing dependency: $1. $2" >&2
     exit 127
   fi
+}
+
+resolve_root() {
+  local raw="$1"
+  if [[ ! -d "$raw" ]]; then
+    echo "Resolved repository is not a directory: $raw" >&2
+    exit 2
+  fi
+  (cd "$raw" && pwd)
+}
+
+find_git_root() {
+  local start="$1"
+  local found=""
+  if command -v git >/dev/null 2>&1; then
+    found="$(git -C "$start" rev-parse --show-toplevel 2>/dev/null || true)"
+  fi
+  if [[ -n "$found" && -d "$found" ]]; then
+    (cd "$found" && pwd)
+  fi
+}
+
+cwd_looks_like_repo() {
+  local cwd="$1"
+  [[ -d "$cwd/.orchestration" || -f "$cwd/package.json" || -d "$cwd/skills" || -d "$cwd/.git" ]]
+}
+
+resolve_repo_after_parse() {
+  if [[ -n "$ROOT" ]]; then
+    return 0
+  fi
+  if [[ -n "${AOC_REPO:-}" ]]; then
+    ROOT="$(resolve_root "$AOC_REPO")"
+    return 0
+  fi
+  local git_root=""
+  git_root="$(find_git_root "$PWD")"
+  if [[ -n "$git_root" ]]; then
+    ROOT="$git_root"
+    return 0
+  fi
+  if cwd_looks_like_repo "$PWD"; then
+    ROOT="$(resolve_root "$PWD")"
+    return 0
+  fi
+  if [[ -d "$DEFAULT_ROOT" ]] && cwd_looks_like_repo "$DEFAULT_ROOT" && [[ "$PWD" == "$DEFAULT_ROOT"* ]]; then
+    ROOT="$(resolve_root "$DEFAULT_ROOT")"
+    return 0
+  fi
+  echo "Unable to resolve repository. Use --repo <path> or set AOC_REPO, or run from a git/worktree root or a project directory containing .orchestration, package.json, skills, or .git." >&2
+  exit 2
 }
 
 run_py() {
@@ -22,33 +84,453 @@ run_py() {
   exec python3 "$SCRIPTS/$script" "$@"
 }
 
-cmd="${1:-tui}"
-if [[ $# -gt 0 ]]; then
-  if [[ "$1" == "-h" || "$1" == "--help" ]]; then
-    cmd="$1"; shift
-  elif [[ "$1" != -* ]]; then
-    cmd="$1"; shift
-  else
-    cmd="tui"
+json_args() {
+  [[ "$JSON" == "1" ]] && printf '%s\0' --json
+}
+
+quiet_args() {
+  [[ "$QUIET" == "1" ]] && printf '%s\0' --quiet
+}
+
+no_open_args() {
+  [[ "$NO_OPEN" == "1" ]] && printf '%s\0' --no-open
+}
+
+selected_run_args() {
+  [[ -n "$SELECTED_RUN_ID" ]] && printf '%s\0%s\0' --run-id "$SELECTED_RUN_ID"
+}
+
+explicit_run_args() {
+  if [[ "$RUN_SOURCE" == "cli" || "$RUN_SOURCE" == "env" ]]; then
+    [[ -n "$SELECTED_RUN_ID" ]] && printf '%s\0%s\0' --run-id "$SELECTED_RUN_ID"
   fi
+}
+
+collect_args() {
+  local out_name="$1"
+  shift
+  local -n out_ref="$out_name"
+  local arg
+  while IFS= read -r -d '' arg; do
+    out_ref+=("$arg")
+  done < <("$@")
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --repo|--root)
+        if [[ $# -lt 2 ]]; then
+          echo "Missing value for $1" >&2
+          exit 2
+        fi
+        ROOT="$(resolve_root "$2")"
+        shift 2 ;;
+      --repo=*)
+        ROOT="$(resolve_root "${1#--repo=}")"
+        shift ;;
+      --root=*)
+        ROOT="$(resolve_root "${1#--root=}")"
+        shift ;;
+      --run-id|--run)
+        if [[ $# -lt 2 ]]; then
+          echo "Missing value for $1" >&2
+          exit 2
+        fi
+        RUN_ID="$2"
+        shift 2 ;;
+      --run-id=*)
+        RUN_ID="${1#--run-id=}"
+        shift ;;
+      --run=*)
+        RUN_ID="${1#--run=}"
+        shift ;;
+      --json)
+        JSON=1
+        shift ;;
+      --quiet|-q)
+        QUIET=1
+        shift ;;
+      --verbose)
+        VERBOSE=1
+        shift ;;
+      --no-open)
+        NO_OPEN=1
+        shift ;;
+      -h|--help)
+        if [[ -z "$CMD" ]]; then
+          CMD="help"
+        else
+          REST+=("$1")
+        fi
+        shift ;;
+      -v|--version)
+        if [[ -z "$CMD" ]]; then
+          CMD="version"
+        else
+          REST+=("$1")
+        fi
+        shift ;;
+      *)
+        if [[ -z "$CMD" && "$1" != -* ]]; then
+          CMD="$1"
+        else
+          REST+=("$1")
+        fi
+        shift ;;
+    esac
+  done
+  CMD="${CMD:-tui}"
+}
+
+valid_run_id() {
+  local value="$1"
+  [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ && "$value" != *".."* && "$value" != */* && "$value" != *\\* ]]
+}
+
+state_exists() {
+  local run_id="$1"
+  valid_run_id "$run_id" && [[ -f "$ROOT/.orchestration/runs/$run_id/state.json" ]]
+}
+
+current_run_file_id() {
+  local path="$ROOT/.orchestration/current-run"
+  local run_id=""
+  if [[ -f "$path" ]]; then
+    read -r run_id _ < "$path" || true
+    if state_exists "$run_id"; then
+      printf '%s' "$run_id"
+    fi
+  fi
+}
+
+current_json_run_id() {
+  need_cmd python3 "Install Python 3 and make sure python3 is on PATH."
+  python3 - "$ROOT" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+path = root / ".orchestration" / "current.json"
+try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+except Exception:
+    data = {}
+run_id = data.get("current_run_id") or data.get("run_id") if isinstance(data, dict) else None
+if isinstance(run_id, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", run_id) and ".." not in run_id and "/" not in run_id and "\\" not in run_id:
+    if (root / ".orchestration" / "runs" / run_id / "state.json").exists():
+        print(run_id)
+PY
+}
+
+latest_run_id() {
+  need_cmd python3 "Install Python 3 and make sure python3 is on PATH."
+  python3 - "$ROOT" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+safe = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+def valid(value):
+    return isinstance(value, str) and safe.fullmatch(value) and ".." not in value and "/" not in value and "\\" not in value
+
+def state_exists(run_id):
+    return valid(run_id) and (root / ".orchestration" / "runs" / run_id / "state.json").exists()
+
+try:
+    index = json.loads((root / ".orchestration" / "index.json").read_text(encoding="utf-8"))
+except Exception:
+    index = {}
+latest = index.get("latest_run_id") if isinstance(index, dict) else None
+if state_exists(latest):
+    print(latest)
+    raise SystemExit(0)
+
+runs = []
+for state_path in (root / ".orchestration" / "runs").glob("*/state.json"):
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except Exception:
+        continue
+    run_id = state.get("run_id") or state_path.parent.name
+    if not state_exists(run_id):
+        continue
+    updated = str(state.get("updated_at") or state.get("created_at") or "")
+    runs.append((updated, str(run_id)))
+if runs:
+    runs.sort()
+    print(runs[-1][1])
+PY
+}
+
+resolve_selected_run_after_parse() {
+  SELECTED_RUN_ID=""
+  RUN_SOURCE="none"
+  if [[ -n "$RUN_ID" && "$RUN_ID" != "current" ]]; then
+    SELECTED_RUN_ID="$RUN_ID"
+    RUN_SOURCE="cli"
+    return 0
+  fi
+  if [[ -z "$RUN_ID" && -n "${AOC_RUN_ID:-}" && "${AOC_RUN_ID:-}" != "current" ]]; then
+    SELECTED_RUN_ID="$AOC_RUN_ID"
+    RUN_SOURCE="env"
+    return 0
+  fi
+  local current_file=""
+  current_file="$(current_run_file_id)"
+  if [[ -n "$current_file" ]]; then
+    SELECTED_RUN_ID="$current_file"
+    RUN_SOURCE="current-run"
+    return 0
+  fi
+  local current_json=""
+  current_json="$(current_json_run_id)"
+  if [[ -n "$current_json" ]]; then
+    SELECTED_RUN_ID="$current_json"
+    RUN_SOURCE="current.json"
+    return 0
+  fi
+  local latest=""
+  latest="$(latest_run_id)"
+  if [[ -n "$latest" ]]; then
+    SELECTED_RUN_ID="$latest"
+    RUN_SOURCE="latest"
+  fi
+}
+
+latest_explicit_codex_session() {
+  need_cmd python3 "Install Python 3 and make sure python3 is on PATH."
+  python3 - "$@" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+homes = []
+args = sys.argv[1:]
+i = 0
+while i < len(args):
+    arg = args[i]
+    if arg == "--codex-home" and i + 1 < len(args):
+        homes.append(args[i + 1])
+        i += 2
+        continue
+    if arg.startswith("--codex-home="):
+        homes.append(arg.split("=", 1)[1])
+    i += 1
+for env_name in ("AOC_CODEX_HOME", "CODEX_HOME"):
+    value = os.environ.get(env_name)
+    if value:
+        homes.append(value)
+seen = set()
+files = []
+for raw in homes:
+    path = str(Path(raw).expanduser().resolve())
+    if path in seen:
+        continue
+    seen.add(path)
+    base = Path(path) / "sessions"
+    if not base.exists():
+        continue
+    for item in base.rglob("rollout-*.jsonl"):
+        if item.is_file():
+            try:
+                files.append((item.stat().st_mtime, str(item.resolve())))
+            except OSError:
+                pass
+if files:
+    files.sort()
+    print(files[-1][1])
+PY
+}
+
+contains_codex_home_arg() {
+  local arg
+  for arg in "$@"; do
+    if [[ "$arg" == "--codex-home" || "$arg" == --codex-home=* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+pin_explicit_codex_latest() {
+  local latest_path=""
+  latest_path="$(latest_explicit_codex_session "$@")"
+  if [[ -z "$latest_path" ]]; then
+    printf '%s\0' "$@"
+    return 0
+  fi
+  if [[ $# -eq 0 ]]; then
+    set -- "$latest_path"
+  elif [[ "$1" == "latest" ]]; then
+    shift
+    set -- "$latest_path" "$@"
+  elif [[ "$1" == -* ]]; then
+    set -- "$@" "$latest_path"
+  fi
+  printf '%s\0' "$@"
+}
+
+codex_target_args() {
+  if [[ -n "${AOC_CODEX_HOME:-}${CODEX_HOME:-}" ]] || contains_codex_home_arg "$@"; then
+    pin_explicit_codex_latest "$@"
+  else
+    printf '%s\0' "$@"
+  fi
+}
+
+print_help() {
+  cat <<'HELP'
+Agentic Orchestration Control
+
+Usage:
+  aoc [command] [options]
+
+Common commands:
+  tui                         Open the terminal control room (default).
+  gui                         Open the local web GUI.
+  init "task"                 Initialize a production run ledger.
+  sessions                    List AOC runs and imported Codex sessions.
+  current                     Print the selected run.
+  use <run|session|path>      Select an AOC run or import/select a Codex session.
+  import [session|path|all]   Import Codex rollout JSONL sessions.
+  watch                       Watch Codex rollout sessions and refresh imported runs.
+  search <query>              Search memory and imported Codex session artifacts.
+  usage                       Show run-scoped usage report with derived pressure.
+  budget [max]                Check usage budget.
+  ccusage [doctor|run|import] Bridge external ccusage JSON into the usage ledger.
+  codex [doctor|status|link]  Optional Codex app-server/codexui bridge.
+  codexui                     Show safe codexui helper commands.
+  publish-check               Validate npm publish readiness.
+  stats                       Show orchestration run statistics.
+  events                      Tail orchestration events.
+  memory [build|search]       Build/search memory index.
+  gates                       Manage STOP gates.
+  snapshot                    Print non-interactive TUI snapshot.
+  doctor                      Run local pack sanity checks.
+
+Options:
+  --repo, --root <path>       Repo to inspect/control.
+  --run-id, --run <id>        Run ID for session-scoped commands.
+  --json                      Print JSON where supported.
+  --quiet                     Suppress non-essential output where supported.
+  --verbose                   Accepted for CLI parity and stripped when unsupported.
+  --no-open                   Do not auto-open browsers where supported.
+HELP
+}
+
+parse_args "$@"
+
+if [[ "$CMD" == "help" || "$CMD" == "version" ]]; then
+  case "$CMD" in
+    help)
+      print_help
+      exit 0 ;;
+    version)
+      echo "0.1.0"
+      exit 0 ;;
+  esac
 fi
-case "$cmd" in
-  tui|control|dashboard) run_py aoc_tui.py --repo "$REPO_ROOT" "$@" ;;
-  snapshot) run_py aoc_tui.py --repo "$REPO_ROOT" --snapshot "$@" ;;
-  gui|web) run_py aoc_gui.py --repo "$REPO_ROOT" "$@" ;;
-  init|new-run) run_id="${1:-latest}"; if [[ $# -gt 0 ]]; then shift; fi; run_py run_ledger.py init --root "$REPO_ROOT" --run-id "$run_id" "$@" ;;
-  usage|report) run_py usage_ledger.py report --root "$REPO_ROOT" --run-id latest --scope-run --derive "$@" ;;
-  statusline) run_py usage_ledger.py statusline --root "$REPO_ROOT" --run-id latest "$@" ;;
-  budget) if [[ "${1:-}" =~ ^[0-9]+$ ]]; then max="$1"; shift; else max="12000"; fi; run_py usage_ledger.py budget --root "$REPO_ROOT" --run-id latest --scope-run --derive --max-estimated-tokens "$max" "$@" ;;
-  ccusage) sub="${1:-doctor}"; if [[ $# -gt 0 ]]; then shift; fi; if [[ "$sub" == "doctor" ]]; then run_py ccusage_bridge.py doctor "$@"; else run_py ccusage_bridge.py "$sub" --root "$REPO_ROOT" "$@"; fi ;;
-  codex) sub="${1:-doctor}"; if [[ $# -gt 0 ]]; then shift; fi; if [[ "$sub" == "doctor" || "$sub" == "start-help" ]]; then run_py codex_appserver_bridge.py "$sub" "$@"; else run_py codex_appserver_bridge.py "$sub" --root "$REPO_ROOT" --run-id latest "$@"; fi ;;
-  codexui) run_py codex_appserver_bridge.py codexui --root "$REPO_ROOT" "$@" ;;
-  publish-check) run_py npm_publish_check.py --root "$REPO_ROOT" "$@" ;;
-  stats) run_py orchestration_stats.py --root "$REPO_ROOT" --run-id latest "$@" ;;
-  events|tail) run_py event_tail.py --root "$REPO_ROOT" --run-id latest "$@" ;;
-  memory) sub="${1:-build}"; if [[ $# -gt 0 ]]; then shift; fi; run_py memory_index.py "$sub" --root "$REPO_ROOT" "$@" ;;
-  gates|gate) sub="${1:-status}"; if [[ $# -gt 0 ]]; then shift; fi; run_py control_gate.py "$sub" --root "$REPO_ROOT" "$@" ;;
-  doctor) run_py token_budget_linter.py --root "$REPO_ROOT" "$@" ;;
-  help|-h|--help) echo "Agentic Orchestration Control: tui, snapshot, gui, init, usage, budget, ccusage, codex, codexui, publish-check, stats, events, memory, gates, doctor" ;;
-  *) echo "Unknown command: $cmd" >&2; exit 2 ;;
+
+resolve_repo_after_parse
+resolve_selected_run_after_parse
+
+json_flags=()
+quiet_flags=()
+no_open_flags=()
+selected_run_flags=()
+explicit_run_flags=()
+collect_args json_flags json_args
+collect_args quiet_flags quiet_args
+collect_args no_open_flags no_open_args
+collect_args selected_run_flags selected_run_args
+collect_args explicit_run_flags explicit_run_args
+
+case "$CMD" in
+  tui|control|dashboard)
+    run_py aoc_tui.py --repo "$ROOT" "${selected_run_flags[@]}" "${json_flags[@]}" "${REST[@]}" ;;
+  snapshot)
+    run_py aoc_tui.py --repo "$ROOT" --snapshot "${selected_run_flags[@]}" "${json_flags[@]}" "${REST[@]}" ;;
+  gui|web)
+    run_py aoc_gui.py --repo "$ROOT" "${selected_run_flags[@]}" "${json_flags[@]}" "${no_open_flags[@]}" "${REST[@]}" ;;
+  sessions|session)
+    run_py codex_session_cli.py sessions --root "$ROOT" "${json_flags[@]}" "${REST[@]}" ;;
+  current)
+    run_py codex_session_cli.py current --root "$ROOT" "${selected_run_flags[@]}" "${json_flags[@]}" "${REST[@]}" ;;
+  use)
+    run_py codex_session_cli.py use --root "$ROOT" "${explicit_run_flags[@]}" "${json_flags[@]}" "${REST[@]}" ;;
+  import)
+    target_args=()
+    collect_args target_args codex_target_args "${REST[@]}"
+    run_py codex_session_cli.py import --root "$ROOT" "${explicit_run_flags[@]}" "${json_flags[@]}" "${quiet_flags[@]}" "${target_args[@]}" ;;
+  watch)
+    target_args=()
+    collect_args target_args codex_target_args "${REST[@]}"
+    run_py codex_session_cli.py watch --root "$ROOT" "${explicit_run_flags[@]}" "${json_flags[@]}" "${quiet_flags[@]}" "${target_args[@]}" ;;
+  search)
+    if [[ ${#REST[@]} -eq 0 ]]; then
+      echo "Usage: aoc search <query>" >&2
+      exit 2
+    fi
+    run_py codex_session_cli.py search --root "$ROOT" "${selected_run_flags[@]}" "${json_flags[@]}" "${REST[@]}" ;;
+  init|new-run)
+    init_args=("${REST[@]}")
+    if [[ ${#init_args[@]} -gt 0 && "${init_args[0]}" != -* ]]; then
+      init_args=(--task "${init_args[@]}")
+    fi
+    run_py run_ledger.py init --root "$ROOT" "${explicit_run_flags[@]}" "${init_args[@]}" ;;
+  usage|report)
+    run_py usage_ledger.py report --root "$ROOT" "${selected_run_flags[@]}" --scope-run --derive "${json_flags[@]}" "${REST[@]}" ;;
+  statusline)
+    run_py usage_ledger.py statusline --root "$ROOT" "${selected_run_flags[@]}" "${REST[@]}" ;;
+  budget)
+    if [[ "${REST[0]:-}" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+      max="${REST[0]}"
+      REST=("${REST[@]:1}")
+    else
+      max="12000"
+    fi
+    run_py usage_ledger.py budget --root "$ROOT" "${selected_run_flags[@]}" --scope-run --derive --max-estimated-tokens "$max" "${json_flags[@]}" "${REST[@]}" ;;
+  ccusage)
+    sub="${REST[0]:-doctor}"
+    if [[ ${#REST[@]} -gt 0 ]]; then REST=("${REST[@]:1}"); fi
+    if [[ "$sub" == "doctor" ]]; then
+      run_py ccusage_bridge.py doctor "${json_flags[@]}" "${REST[@]}"
+    else
+      run_py ccusage_bridge.py "$sub" --root "$ROOT" "${selected_run_flags[@]}" "${json_flags[@]}" "${REST[@]}"
+    fi ;;
+  codex)
+    sub="${REST[0]:-doctor}"
+    if [[ ${#REST[@]} -gt 0 ]]; then REST=("${REST[@]:1}"); fi
+    if [[ "$sub" == "doctor" || "$sub" == "start-help" ]]; then
+      run_py codex_appserver_bridge.py "$sub" "${json_flags[@]}" "${REST[@]}"
+    else
+      run_py codex_appserver_bridge.py "$sub" --root "$ROOT" "${selected_run_flags[@]}" "${json_flags[@]}" "${REST[@]}"
+    fi ;;
+  codexui)
+    run_py codex_appserver_bridge.py codexui "${REST[@]}" ;;
+  publish-check)
+    run_py npm_publish_check.py --root "$ROOT" "${REST[@]}" ;;
+  stats)
+    run_py orchestration_stats.py --root "$ROOT" "${selected_run_flags[@]}" "${json_flags[@]}" "${REST[@]}" ;;
+  events|tail)
+    run_py event_tail.py --root "$ROOT" "${selected_run_flags[@]}" "${json_flags[@]}" "${REST[@]}" ;;
+  memory)
+    sub="${REST[0]:-build}"
+    if [[ ${#REST[@]} -gt 0 ]]; then REST=("${REST[@]:1}"); fi
+    run_py memory_index.py "$sub" --root "$ROOT" "${selected_run_flags[@]}" "${json_flags[@]}" "${REST[@]}" ;;
+  gates|gate)
+    sub="${REST[0]:-status}"
+    if [[ ${#REST[@]} -gt 0 ]]; then REST=("${REST[@]:1}"); fi
+    run_py control_gate.py "$sub" --root "$ROOT" "${selected_run_flags[@]}" "${json_flags[@]}" "${REST[@]}" ;;
+  doctor)
+    run_py token_budget_linter.py --root "$ROOT" "${REST[@]}" ;;
+  *)
+    echo "Unknown command: $CMD" >&2
+    exit 2 ;;
 esac
