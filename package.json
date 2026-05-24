@@ -1,6 +1,6 @@
 {
   "name": "agentic-orchestration-control",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": false,
   "description": "npx-first TUI/GUI control room and token-aware orchestration skill for Codex subagents.",
   "license": "MIT",

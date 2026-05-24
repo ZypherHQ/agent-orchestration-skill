@@ -503,50 +503,6 @@ run('mkdir', ['-p', packDir]);
 run('mkdir', ['-p', npmCache]);
 run('mkdir', ['-p', npmHome]);
 const npmIsolatedEnv = { npm_config_cache: npmCache, NPM_CONFIG_CACHE: npmCache, HOME: npmHome };
-const distTarball = join(ROOT, 'dist', `${packageJson.name}-${packageJson.version}.tgz`);
-if (!existsSync(distTarball)) throw new Error(`missing dist tarball smoke artifact: ${distTarball}`);
-const distHelp = run('npx', ['--yes', '--package', distTarball, 'agentic-orchestration-control', '--help'], {
-  cwd: ROOT,
-  timeout: 240000,
-  env: npmIsolatedEnv
-});
-assertHelpIncludes(distHelp, codexSessionShimCommands);
-const distRepo = join(td, 'dist-npx-repo');
-run('mkdir', ['-p', distRepo]);
-run('git', ['init', '-q'], { cwd: distRepo });
-run('npx', ['--yes', '--package', distTarball, 'agentic-orchestration-control', 'install', distRepo], {
-  cwd: ROOT,
-  timeout: 240000,
-  env: npmIsolatedEnv
-});
-const distShortInit = parseJsonResult(run('npx', ['--yes', '--package', distTarball, 'agentic-orchestration-control', 'init', 'Dist tarball short task', '--repo', distRepo, '--json'], {
-  cwd: ROOT,
-  timeout: 240000,
-  env: npmIsolatedEnv
-}), 'dist tarball npx short init');
-if (!distShortInit.run_id || !existsSync(distShortInit.state)) throw new Error(`dist tarball npx short init did not create state: ${JSON.stringify(distShortInit)}`);
-const distBundledSkillAoc = join(distRepo, 'skills', 'agent-orchestration-skill', 'bin', 'aoc');
-const distBundledSessions = assertSessionRows(parseJsonResult(run(distBundledSkillAoc, ['sessions', '--json'], {
-  cwd: distRepo,
-  timeout: 240000,
-  env: npmIsolatedEnv
-}), 'dist installed bundled skill bin sessions'), 'dist installed bundled skill bin sessions');
-if (!distBundledSessions.some(r => r.run_id === distShortInit.run_id)) {
-  throw new Error(`dist installed bundled skill bin sessions did not see dist run: ${JSON.stringify(distBundledSessions)}`);
-}
-const distNativeNeedle = 'dist-native-search-marker-aoc-20260524';
-const distState = JSON.parse(readFileSync(distShortInit.state, 'utf8'));
-distState.dist_native_search_marker = distNativeNeedle;
-writeFileSync(distShortInit.state, JSON.stringify(distState, null, 2) + '\n', 'utf8');
-const distNativeSearch = parseJsonResult(run('npx', ['--yes', '--package', distTarball, 'agentic-orchestration-control', 'search', distNativeNeedle, '--repo', distRepo, '--json'], {
-  cwd: ROOT,
-  timeout: 240000,
-  env: npmIsolatedEnv
-}), 'dist tarball npx native search');
-if (!Array.isArray(distNativeSearch) || !distNativeSearch.some(r => r.run_id === distShortInit.run_id && String(r.path || '').endsWith('state.json'))) {
-  throw new Error(`dist tarball npx search did not find native state content: ${JSON.stringify(distNativeSearch)}`);
-}
-pass('dist tarball npx help/install/short init/bundled shim/native search smoke works with isolated npm cache');
 const packPayload = parseJsonResult(run('npm', ['pack', '--pack-destination', packDir, '--json'], {
   cwd: ROOT,
   timeout: 240000,
@@ -555,11 +511,57 @@ const packPayload = parseJsonResult(run('npm', ['pack', '--pack-destination', pa
 const packed = Array.isArray(packPayload) ? packPayload[0] : packPayload;
 const packedFile = packed && packed.filename ? join(packDir, packed.filename) : '';
 if (!packedFile || !existsSync(packedFile)) throw new Error(`npm pack did not create tarball in clean temp dir: ${JSON.stringify(packPayload)}`);
+if (packed.name !== packageJson.name || packed.version !== packageJson.version) {
+  throw new Error(`npm pack tarball does not match package.json: ${JSON.stringify({ expected: { name: packageJson.name, version: packageJson.version }, packed: { name: packed.name, version: packed.version, filename: packed.filename } })}`);
+}
 const packedPaths = new Set((packed.files || []).map(f => f.path));
 for (const required of packageFiles) {
   if (!packedPaths.has(required)) throw new Error(`npm pack tarball missing command contract file: ${required}`);
 }
-pass('npm pack tarball smoke includes command contract assets');
+pass('npm pack tarball smoke includes command contract assets and current package version');
+const packedTarball = packedFile;
+const packedHelp = run('npx', ['--yes', '--package', packedTarball, 'agentic-orchestration-control', '--help'], {
+  cwd: ROOT,
+  timeout: 240000,
+  env: npmIsolatedEnv
+});
+assertHelpIncludes(packedHelp, codexSessionShimCommands);
+const packedRepo = join(td, 'packed-npx-repo');
+run('mkdir', ['-p', packedRepo]);
+run('git', ['init', '-q'], { cwd: packedRepo });
+run('npx', ['--yes', '--package', packedTarball, 'agentic-orchestration-control', 'install', packedRepo], {
+  cwd: ROOT,
+  timeout: 240000,
+  env: npmIsolatedEnv
+});
+const packedShortInit = parseJsonResult(run('npx', ['--yes', '--package', packedTarball, 'agentic-orchestration-control', 'init', 'Packed tarball short task', '--repo', packedRepo, '--json'], {
+  cwd: ROOT,
+  timeout: 240000,
+  env: npmIsolatedEnv
+}), 'packed tarball npx short init');
+if (!packedShortInit.run_id || !existsSync(packedShortInit.state)) throw new Error(`packed tarball npx short init did not create state: ${JSON.stringify(packedShortInit)}`);
+const packedBundledSkillAoc = join(packedRepo, 'skills', 'agent-orchestration-skill', 'bin', 'aoc');
+const packedBundledSessions = assertSessionRows(parseJsonResult(run(packedBundledSkillAoc, ['sessions', '--json'], {
+  cwd: packedRepo,
+  timeout: 240000,
+  env: npmIsolatedEnv
+}), 'packed installed bundled skill bin sessions'), 'packed installed bundled skill bin sessions');
+if (!packedBundledSessions.some(r => r.run_id === packedShortInit.run_id)) {
+  throw new Error(`packed installed bundled skill bin sessions did not see packed run: ${JSON.stringify(packedBundledSessions)}`);
+}
+const packedNativeNeedle = 'packed-native-search-marker-aoc-20260524';
+const packedState = JSON.parse(readFileSync(packedShortInit.state, 'utf8'));
+packedState.packed_native_search_marker = packedNativeNeedle;
+writeFileSync(packedShortInit.state, JSON.stringify(packedState, null, 2) + '\n', 'utf8');
+const packedNativeSearch = parseJsonResult(run('npx', ['--yes', '--package', packedTarball, 'agentic-orchestration-control', 'search', packedNativeNeedle, '--repo', packedRepo, '--json'], {
+  cwd: ROOT,
+  timeout: 240000,
+  env: npmIsolatedEnv
+}), 'packed tarball npx native search');
+if (!Array.isArray(packedNativeSearch) || !packedNativeSearch.some(r => r.run_id === packedShortInit.run_id && String(r.path || '').endsWith('state.json'))) {
+  throw new Error(`packed tarball npx search did not find native state content: ${JSON.stringify(packedNativeSearch)}`);
+}
+pass('fresh npm pack tarball npx help/install/short init/bundled shim/native search smoke works with isolated npm cache');
 
 run(join(ROOT, 'skills', 'agent-orchestration-skill', 'bin', 'aoc'), ['publish-check']);
 pass('skill-local aoc publish-check command');
