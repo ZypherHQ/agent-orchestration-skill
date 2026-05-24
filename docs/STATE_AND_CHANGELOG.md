@@ -4,7 +4,7 @@
 
 The repository currently provides:
 
-- An npm/npx CLI router in `bin/aoc.mjs`.
+- An npm CLI router in `bin/aoc.mjs`.
 - A production `skills/agent-orchestration-skill/` payload.
 - Leaf-worker subagent profiles in `subagents/`.
 - An installer that writes supported layouts under `skills/`, `subagents/`, and `.orchestration/`.
@@ -57,7 +57,7 @@ Added the focused `/docs` set:
 
 Latest command-docs audit:
 
-- Public user docs now prefer `npx --yes agentic-orchestration-control ...` and `aoc ...` commands instead of source-tree router examples.
+- Public user docs now prefer `npm install -g agentic-orchestration-control` plus `aoc ...` commands instead of source-tree router examples.
 - GUI examples document both `/api/snapshot` JSON reads and the `/events` SSE stream for realtime inspection.
 - Internal skill references still keep direct bundled Python commands where no public CLI route exists; `SKILL.md` labels those as low-level control-plane operations.
 

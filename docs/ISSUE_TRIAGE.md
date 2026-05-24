@@ -8,7 +8,7 @@ Use this page to reproduce and verify known or likely issues.
 | --- | --- | --- | --- | --- |
 | Hidden legacy `.agents` or `.codex` payload blocks publish checks. | High | Fixed for empty sandbox-mounted directories; still enforced for hidden dirs with payload. | Run `npm run publish:check`. | Command passes for empty sandbox mounts and fails if hidden production payload exists. |
 | Python bytecode artifacts can fail publish validation. | Medium | Known packaging hygiene risk. | Run `find . -name __pycache__ -o -name '*.pyc'` before publish checks. | `npm run validate:production` passes and no bytecode appears in `npm pack --dry-run`. |
-| GUI server stays running without `--once`. | Low | Expected behavior, easy to mistake for a hang. | Run `npx --yes agentic-orchestration-control gui --repo . --run-id smoke`. | Use `--once` when a static HTML snapshot is wanted. |
+| GUI server stays running without `--once`. | Low | Expected behavior, easy to mistake for a hang. | Run `aoc gui --repo . --run-id smoke`. | Use `--once` when a static HTML snapshot is wanted. |
 | `logs.txt` may contain stale local output. | Low | Needs cleanup decision. | Open `logs.txt` and check whether it is release-worthy. | Remove from release process or replace with intentional sample evidence. |
 
 ## Triage Template
@@ -23,7 +23,7 @@ Copy this into a GitHub issue:
 ## Reproduction
 
 ```bash
-npx --yes agentic-orchestration-control --help
+aoc --help
 npm run validate:production
 ```
 
@@ -54,8 +54,8 @@ Paste the shortest useful output. Do not paste `.orchestration/` logs without ch
 Run:
 
 ```bash
-npx --yes agentic-orchestration-control --help
-npx --yes agentic-orchestration-control --version
+aoc --help
+aoc --version
 npm test
 npm run test:npm-cli
 ```

@@ -20,7 +20,7 @@ This repository packages an explicit-only Codex orchestration skill, subagent pr
 
 | Path | Role |
 | --- | --- |
-| `bin/aoc.mjs` | npm/npx command router. Routes commands to bundled Python scripts. |
+| `bin/aoc.mjs` | npm command router. Routes commands to bundled Python scripts. |
 | `tools/fix-permissions.mjs` | Normalizes executable bits before tests and publish checks. |
 | `dist/*.tgz` | Locally packed npm tarball artifacts. Regenerate before release validation. |
 

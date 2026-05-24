@@ -4,14 +4,15 @@
   <img src="workflow-diagram.png" alt="Agentic Orchestration Control workflow" width="100%" />
 </p>
 
-Agentic Orchestration Control is an explicit-only npm/npx control room for Codex orchestration. It installs a Codex skill, leaf-worker profiles, local run ledgers, usage reports, Codex session import, and TUI/GUI views into a repository without using hidden `.skills`, `.agents`, or `.codex` package layouts.
+Agentic Orchestration Control is an explicit-only npm control room for Codex orchestration. It installs a Codex skill, leaf-worker profiles, local run ledgers, usage reports, Codex session import, and TUI/GUI views into a repository without using hidden `.skills`, `.agents`, or `.codex` package layouts.
 
 ## Start In 10 Seconds
 
-Install into the repository you are working in:
+Install the published package globally, then install AOC into the repository you are working in:
 
 ```bash
-npx --yes agentic-orchestration-control install .
+npm install -g agentic-orchestration-control
+aoc install .
 ```
 
 Open the control room:

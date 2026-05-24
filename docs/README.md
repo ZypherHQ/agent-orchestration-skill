@@ -25,8 +25,9 @@ Start here when you need more than the top-level quickstart.
 Use the code and package metadata as the source of truth:
 
 ```bash
-npx --yes agentic-orchestration-control --help
-npx --yes agentic-orchestration-control --version
+npm install -g agentic-orchestration-control
+aoc --help
+aoc --version
 npm run validate:production
 ```
 

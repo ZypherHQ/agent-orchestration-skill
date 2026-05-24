@@ -33,11 +33,12 @@ Act as a **task compiler, context-preserving control-plane operator, and event-d
 For normal project use, prefer the public CLI:
 
 ```bash
-npx --yes agentic-orchestration-control --help
-npx --yes agentic-orchestration-control install .
-npx --yes agentic-orchestration-control init --repo . --task "<task>"
-npx --yes agentic-orchestration-control tui --repo .
-npx --yes agentic-orchestration-control gui --repo .
+npm install -g agentic-orchestration-control
+aoc --help
+aoc install .
+aoc init --repo . --task "<task>"
+aoc tui --repo .
+aoc gui --repo .
 ```
 
 The direct `python skills/agent-orchestration-skill/scripts/*.py` examples below are low-level internal control-plane commands for the root skill operator. Use them only when the public `aoc`/`agentic-orchestration-control` route does not expose the required operation.
@@ -278,13 +279,9 @@ Open the local control-room TUI or GUI when the user asks to inspect orchestrati
 
 ```bash
 aoc
-# or
-npx --yes agentic-orchestration-control
 
 # GUI
 aoc gui
-# or
-npx --yes agentic-orchestration-control gui
 ```
 
 Initialize a production run ledger when the user explicitly asks to start an observable orchestration session before work begins:

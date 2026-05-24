@@ -36,7 +36,7 @@ npm run validate:production
 Inspect the CLI help:
 
 ```bash
-npx --yes agentic-orchestration-control --help
+aoc --help
 ```
 
 Check the explicit-only trigger is still documented:

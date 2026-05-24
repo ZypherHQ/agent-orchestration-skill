@@ -1,9 +1,10 @@
 # Usage Examples
 
-These examples use the short `aoc` command after installing the package into a repository:
+These examples use the short `aoc` command after installing the published package globally and installing AOC into a repository:
 
 ```bash
-npx --yes agentic-orchestration-control install .
+npm install -g agentic-orchestration-control
+aoc install .
 ```
 
 If `aoc` is not on `PATH`, use the local shim:
@@ -208,7 +209,8 @@ Pack and test the local package:
 npm pack --pack-destination dist
 tmp="$(mktemp -d)"
 git init -q "$tmp/repo"
-npx --yes --package ./dist/agentic-orchestration-control-0.1.0.tgz \
+npm exec --yes --package ./dist/agentic-orchestration-control-*.tgz \
+  -- \
   agentic-orchestration-control install "$tmp/repo"
 ```
 

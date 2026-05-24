@@ -17,7 +17,7 @@ This package is a local orchestration control tool. It does not need network acc
 Render a static HTML snapshot when possible:
 
 ```bash
-npx --yes agentic-orchestration-control gui \
+aoc gui \
   --repo . \
   --run-id smoke \
   --once > /tmp/aoc-smoke.html
@@ -27,7 +27,7 @@ Expose remote access only with an explicit token:
 
 ```bash
 AOC_GUI_TOKEN="change-me" \
-  npx --yes agentic-orchestration-control gui \
+  aoc gui \
   --repo . \
   --run-id smoke \
   --host 0.0.0.0 \

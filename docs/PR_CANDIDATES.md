@@ -21,14 +21,14 @@ npm run validate:production
 
 Scope:
 
-- Review `npx --yes agentic-orchestration-control --help` for command accuracy.
+- Review `aoc --help` for command accuracy.
 - Add missing examples only where they map to implemented routes.
 - Keep the help output short.
 
 Validation:
 
 ```bash
-npx --yes agentic-orchestration-control --help
+aoc --help
 npm run test:npm-cli
 ```
 

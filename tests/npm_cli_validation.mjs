@@ -394,6 +394,40 @@ with tempfile.TemporaryDirectory() as home:
 run('python3', ['-c', rootFallbackProbe]);
 pass('Codex /root/.codex fallback is permission-safe');
 
+const tuiScrollProbe = `
+import sys
+from pathlib import Path
+
+sys.path.insert(0, ${JSON.stringify(scripts)})
+import aoc_tui
+
+sessions = [
+    {
+        "run_id": f"run-{i:02d}",
+        "status": "active",
+        "task": f"Task {i}",
+        "last_event": f"event {i}",
+        "source_path": f"/tmp/session-{i}.jsonl",
+    }
+    for i in range(20)
+]
+
+lines = aoc_tui.lines_sessions(Path("."), sessions, 12)
+target = aoc_tui.selected_session_line(sessions, 12)
+scroll = aoc_tui.keep_line_visible(0, target, 6, len(lines))
+if scroll <= 0:
+    raise AssertionError(f"session viewport did not scroll down: scroll={scroll}, target={target}")
+if not (scroll <= target < scroll + 6):
+    raise AssertionError(f"selected row outside viewport: scroll={scroll}, target={target}")
+
+top_target = aoc_tui.selected_session_line(sessions, 0)
+top_scroll = aoc_tui.keep_line_visible(scroll, top_target, 6, len(lines), context_before=2)
+if top_scroll != 0:
+    raise AssertionError(f"session viewport did not return to top: {top_scroll}")
+`;
+run('python3', ['-c', tuiScrollProbe]);
+pass('TUI sessions viewport follows Up/Down selection');
+
 const fakeCodexHome = join(td, 'fake-codex-home');
 const rolloutDir = join(fakeCodexHome, 'sessions', '2026', '05', '24');
 mkdirSync(rolloutDir, { recursive: true });

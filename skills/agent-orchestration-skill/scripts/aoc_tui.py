@@ -434,6 +434,29 @@ def lines_sessions(root: Path, sessions: list[dict[str, Any]], selected: int) ->
     return out
 
 
+def selected_session_line(sessions: list[dict[str, Any]], selected: int) -> int:
+    line = 2
+    for i, r in enumerate(sessions):
+        if i == selected:
+            return line
+        line += 1
+        if session_path(r) or r.get("last_event"):
+            line += 1
+    return 0
+
+
+def keep_line_visible(scroll: int, target_line: int, visible_lines: int, total_lines: int, context_before: int = 0) -> int:
+    if visible_lines <= 0:
+        return 0
+    max_scroll = max(0, total_lines - visible_lines)
+    scroll = max(0, min(scroll, max_scroll))
+    if target_line < scroll + context_before:
+        scroll = max(0, target_line - context_before)
+    elif target_line >= scroll + visible_lines:
+        scroll = target_line - visible_lines + 1
+    return max(0, min(scroll, max_scroll))
+
+
 def empty_state_lines() -> list[str]:
     homes = ", ".join(str(p) for p in codex_homes())
     return [
@@ -784,7 +807,7 @@ def draw(stdscr: Any, root: Path, run_id_arg: str | None, interval: float) -> No
         lines = tab_lines(root, tab, sessions, selected, run_id)
         max_body = h - 4
         if tab == 0:
-            scroll = 0
+            scroll = keep_line_visible(scroll, selected_session_line(sessions, selected), max_body, len(lines), context_before=2)
         else:
             scroll = max(0, min(scroll, max(0, len(lines) - max_body)))
         for row, line in enumerate(lines[scroll : scroll + max_body], start=3):
